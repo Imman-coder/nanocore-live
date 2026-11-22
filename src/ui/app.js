@@ -2,7 +2,7 @@
 import { BLOCK_BY_ID, SNAPSHOT_BLOCKS } from '../core/spec.js';
 import {
   loadState, saveState, createDefaultState, setActivePreset, updatePreset,
-  upsertStomp, assignmentsFor, effectiveStompLabel,
+  upsertStomp, assignmentsFor, effectiveStompLabel, setScene, setSceneEnabled,
   setBlockStomp, setParamPedal, pedalOwner, setExpressionTrigger,
 } from '../core/store.js';
 import { createRouter, describeTrigger } from '../core/router.js';
@@ -29,6 +29,10 @@ const pendingKey = (sequence, command) => `${sequence}:${command}`;
 const assembler = new ResponseAssembler();
 let lastReply = null;
 let lastSnapshotPreset = null;
+let deviceBaseline = null;
+let deviceBaselineEnabled = null;
+const MIDI_GAP_MS = 25;
+let sendChain = Promise.resolve();
 const names = { presets: new Map(), amp: null, ir: null };
 const logLines = [];
 
@@ -59,12 +63,18 @@ function setStatus(text, online = false) {
 }
 
 function send(bytes) {
-  if (!transport) throw new Error('Connect to the NANOCORE first');
-  transport.send(bytes);
-  log('→ ' + [...bytes].map((b) => b.toString(16).padStart(2, '0')).join(' '));
+  // The pedal cannot process a burst of messages, so every write is spaced out.
+  const task = sendChain.then(async () => {
+    if (!transport) throw new Error('Connect to the NANOCORE first');
+    transport.send(bytes);
+    log('→ ' + [...bytes].map((b) => b.toString(16).padStart(2, '0')).join(' '));
+    await new Promise((resolve) => setTimeout(resolve, MIDI_GAP_MS));
+  });
+  sendChain = task.catch(() => {});
+  return task;
 }
 
-function sendRequest(command, payload = [], timeout = 1600) {
+function sendRequest(command, payload = [], timeout = 3000) {
   const seq = sequence++ & 0xff;
   const bytes = buildRequestSysEx(command, payload, seq);
   return new Promise((resolve, reject) => {
@@ -73,7 +83,11 @@ function sendRequest(command, payload = [], timeout = 1600) {
       reject(new Error(`No reply to opcode 0x${command.toString(16)} (last device reply: ${lastReply ?? 'none'})`));
     }, timeout);
     pending.set(pendingKey(seq, command), { resolve, reject, timer });
-    try { send(bytes);    } catch (error) { clearTimeout(timer); pending.delete(pendingKey(seq, command)); reject(error); }
+    Promise.resolve(send(bytes)).catch((error) => {
+      clearTimeout(timer);
+      pending.delete(pendingKey(seq, command));
+      reject(error);
+    });
   });
 }
 
@@ -99,6 +113,9 @@ function applySnapshot(parsed) {
   const presetChanged = lastSnapshotPreset !== null && lastSnapshotPreset !== parsed.activePreset;
   lastSnapshotPreset = parsed.activePreset;
   snapshot = parsed;
+  deviceBaseline = Object.fromEntries(parsed.blocks.flatMap((block) =>
+    block.params.map((value, index) => [`${block.id}:${index}`, value])));
+  deviceBaselineEnabled = Object.fromEntries(parsed.blocks.map((block) => [block.id, block.enabled]));
   syncPresetFromDevice();
   for (const block of snapshot.blocks) router.setBlockState(block.id, block.enabled);
   render();
@@ -157,6 +174,7 @@ const router = createRouter({
   getActiveRow: currentAssignments,
   send,
   isDevicePort: (port) => /nanocore/i.test(port),
+  onScene: (scene) => ctx.recallScene(scene),
   getVariant: (blockId) => snapshot?.blocks.find((b) => b.id === blockId)?.variant ?? 0,
   onEvent: (event) => {
     log(`${event.type}: ${JSON.stringify(event).slice(0, 140)}`);
@@ -351,19 +369,67 @@ const ctx = {
   presetLabel,
   assetNames(kind) { return loadAssetNames(kind); },
   refreshAssetNames,
+  storeScene(name) {
+    if (!snapshot) return notify('Connect and read the preset first');
+    const values = {};
+    const enabled = {};
+    for (const block of snapshot.blocks) {
+      block.params.forEach((value, index) => { values[`${block.id}:${index}`] = value; });
+      enabled[block.id] = Boolean(block.enabled);
+    }
+    let next = setScene(state, state.activePreset, name, values);
+    next = setSceneEnabled(next, state.activePreset, name, enabled);
+    update(next);
+    notify(`${name === 'base' ? 'Base' : `Scene ${name.slice(-1)}`} stored with ${Object.keys(enabled).length} fx states`);
+  },
+  recallScene(name) {
+    update({ activeScene: name });
+    const values = name === 'base' ? deviceBaseline : currentAssignments().scenes?.[name];
+    if (!values || !Object.keys(values).length) return notify('Nothing stored in that scene yet');
+    let changes = 0;
+    const onOff = name === 'base' ? deviceBaselineEnabled : currentAssignments().sceneEnabled?.[name];
+    for (const [block, on] of Object.entries(onOff ?? {})) {
+      const currentBlock = snapshot?.blocks.find((b) => b.id === block);
+      if (!currentBlock || !BLOCK_BY_ID[block]?.onOffCc || currentBlock.enabled === Boolean(on)) continue;
+      send(buildCc(state.globals.midiChannel ?? 1, BLOCK_BY_ID[block].onOffCc, on ? 127 : 0));
+      ctx.noteEnabled(block, Boolean(on));
+      changes++;
+    }
+    for (const [key, value] of Object.entries(values)) {
+      const [block, index] = key.split(':');
+      const current = snapshot?.blocks.find((b) => b.id === block)?.params[Number(index)];
+      if (current === undefined || Math.abs(current - value) < 0.005) continue;
+      ctx.setParameter(block, Number(index), value);
+      changes++;
+    }
+    render();
+    notify(`${name === 'base' ? 'Base' : `Scene ${name.slice(-1)}`} recalled · ${changes} parameters changed`);
+  },
   setChainOrder(order) {
     const indices = order.map((id) => SNAPSHOT_BLOCKS.indexOf(id));
     if (indices.length !== 8 || indices.some((i) => i < 0)) return;
     send(buildRequestSysEx(COMMAND.SET_FIELD, [FIELD.CHAIN_ORDER, 8, ...indices]));
     setTimeout(readSnapshot, 300);
   },
+  noteEnabled(blockId, on) {
+    const block = snapshot?.blocks.find((b) => b.id === blockId);
+    if (block) block.enabled = Boolean(on);
+  },
+  noteParameter(blockId, paramIndex, normalized) {
+    const block = snapshot?.blocks.find((b) => b.id === blockId);
+    if (block && Number.isInteger(paramIndex) && block.params[paramIndex] !== undefined) {
+      block.params[paramIndex] = Math.max(0, Math.min(1, normalized));
+    }
+  },
   setParameter(blockId, paramIndex, normalized) {
     const effectIndex = SNAPSHOT_BLOCKS.indexOf(blockId);
     if (effectIndex === -1) return;
+    const value = Math.max(0, Math.min(1, normalized));
     const view = new DataView(new ArrayBuffer(4));
-    view.setFloat32(0, Math.max(0, Math.min(1, normalized)), true);
+    view.setFloat32(0, value, true);
     send(buildRequestSysEx(COMMAND.SET_FIELD,
       [FIELD.PARAMETER, effectIndex, paramIndex, ...new Uint8Array(view.buffer)]));
+    ctx.noteParameter(blockId, paramIndex, value);
   },
   setAssetName(kind, slot, name) {
     if (Array.isArray(names[kind]) && names[kind][slot] !== undefined) {

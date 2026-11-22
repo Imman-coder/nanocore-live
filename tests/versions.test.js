@@ -74,6 +74,18 @@ test('modified firmware maps FX2 Range slot to Pitch on 1.12+', () => {
   assert.deepEqual([pitch.params[0].min, pitch.params[0].max], [-24, 24]);
 });
 
+
+test('firmware 1.2+ caps every delay time at 2000 ms', () => {
+  for (const firmware of ['1.2', '1.3.5', '1.2-modified']) {
+    for (const type of typesFor('del', firmware)) {
+      const time = type.params.find((p) => p.label === 'Time' || p.label === 'Delay');
+      assert.ok(time, `${type.slug} has a time control`);
+      assert.equal(time.max, 2000, `${type.slug} on ${firmware}`);
+    }
+  }
+  assert.equal(typesFor('del', '1.10').find((t) => t.slug === 'bbd').params[0].max, 2000);
+});
+
 test('firmware 1.2 adds the new FX1 types with the supplied ranges', () => {
   const fx1 = typesFor('fx1', '1.2');
   const peak = fx1.find((t) => t.slug === 'peak_comp');

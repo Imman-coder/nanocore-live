@@ -98,6 +98,16 @@ function detail(ctx, blockId, live) {
       <button class="radio-card ${!fsId ? 'active' : ''}" data-action="select-stomp" data-block="${blockId}" data-fs="">
         <b>None</b><span class="muted small">unassigned</span></button>
     </div>
+    <h3>Scenes <span class="muted small">— store the current parameter values, recall instantly</span></h3>
+    <div class="radio-row scene-row">
+      ${['base', 'scene1', 'scene2'].map((scene) => `<button class="radio-card ${ctx.state.activeScene === scene ? 'active' : ''}"
+        data-action="select-scene" data-scene="${scene}">
+        <b>${scene === 'base' ? 'Base' : `Scene ${scene.slice(-1)}`}</b>
+        <span class="muted small">${scene === 'base' ? 'pedal values' : `${Object.keys(ctx.assignments.scenes?.[scene] ?? {}).length} stored`}</span></button>`).join('')}
+      <button class="radio-card" data-action="store-scene" data-scene="${ctx.state.activeScene}">
+        <b>Store to ${ctx.state.activeScene === 'base' ? 'Base' : `Scene ${ctx.state.activeScene.slice(-1)}`}</b>
+        <span class="muted small">save current values here</span></button>
+    </div>
     <h3>Parameters <span class="muted small">— right-click a parameter to assign an expression pedal</span></h3>
     <div class="param-list">
       ${params.map((param, index) => paramRow(ctx, blockId, param, live.params[index], index)).join('')
@@ -246,6 +256,10 @@ document.addEventListener('click', (event) => {
   }
   const stomp = event.target.closest('[data-action="select-stomp"]');
   if (stomp) return ctx.setBlockStomp(ctx.state.activePreset, stomp.dataset.block, stomp.dataset.fs || null);
+  const scene = event.target.closest('[data-action="select-scene"]');
+  if (scene) return ctx.recallScene(scene.dataset.scene);
+  const store = event.target.closest('[data-action="store-scene"]');
+  if (store) return ctx.storeScene(store.dataset.scene);
 });
 
 document.addEventListener('contextmenu', (event) => {
@@ -269,6 +283,8 @@ document.addEventListener('input', (event) => {
     currentCtx?.send(buildCc(currentCtx.state.globals.midiChannel ?? 1, Number(el.dataset.cc), value));
   }
   const real = Number(el.dataset.min) + (value / 127) * (Number(el.dataset.max) - Number(el.dataset.min));
+  const span = Number(el.dataset.max) - Number(el.dataset.min);
+  if (span > 0) currentCtx?.noteParameter(el.dataset.block, Number(el.dataset.index), (real - Number(el.dataset.min)) / span);
   const display = el.parentElement?.querySelector('.knob-meta .value');
   if (display) display.textContent = `${real.toFixed(Number(el.dataset.decimals))}${el.dataset.unit ?? ''}`;
 });
@@ -282,6 +298,8 @@ document.addEventListener('change', (event) => {
   const channel = ctx.state.globals.midiChannel ?? 1;
   if (el.dataset.edit === 'enabled') {
     ctx.send(buildCc(channel, BLOCK_BY_ID[el.dataset.block].onOffCc, el.checked ? 127 : 0));
+    ctx.noteEnabled(el.dataset.block, el.checked);
+    ctx.render();
     setTimeout(ctx.readSnapshot, 250);
   } else if (el.dataset.edit === 'type') {
     if (el.value === 'null') {
@@ -308,6 +326,9 @@ document.addEventListener('change', (event) => {
       ctx.setParameter(el.dataset.block, Number(el.dataset.index), options.length > 1 ? index / (options.length - 1) : 0);
     } else {
       ctx.send(buildCc(channel, Number(el.dataset.cc), enumToCc(Number(el.value), options)));
+      ctx.noteParameter(el.dataset.block, Number(el.dataset.index),
+        options.length > 1 ? Number(el.value) / (options.length - 1) : 0);
     }
+    ctx.render();
   }
 });

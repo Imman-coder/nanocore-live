@@ -159,6 +159,18 @@ test('program-change recall can be selected instead of SysEx', () => {
   assert.deepEqual(sent, [[0xb0, 0, 0], [0xb0, 32, 0], [0xc0, 8]]);
 });
 
+
+test('a scene switch recalls its assigned scene', () => {
+  const g = { ...globals, sceneSwitches: [
+    { id: 'S2', name: 'Scene 1', trigger: { type: 'cc', channel: 1, number: 85 }, scene: 'scene1' },
+  ] };
+  const recalled = [];
+  const router = createRouter({ globals: g, getActiveRow: () => ({ preset: 1, stomps: [], expressions: [] }),
+    send: () => {}, onScene: (scene) => recalled.push(scene) });
+  router.handleMidi({ port: 'GT-10', bytes: [0xb0, 85, 127] });
+  assert.deepEqual(recalled, ['scene1']);
+});
+
 test('describeTrigger renders a readable label', () => {
   assert.equal(describeTrigger({ type: 'cc', channel: 1, number: 6 }), 'CC 6');
   assert.equal(describeTrigger({ type: 'pc', channel: 2 }), 'PC (ch 2)');

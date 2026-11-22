@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   createDefaultState, loadState, saveState, exportState, importState,
   setActivePreset, updatePreset, upsertStomp, upsertExpression,
-  setBlockStomp, setParamPedal, pedalOwner,
+  setBlockStomp, setParamPedal, pedalOwner, setScene, setSceneEnabled,
   effectiveStompLabel, assignmentsFor,
 } from '../src/core/store.js';
 
@@ -87,6 +87,32 @@ test('import rejects a document from an incompatible version', () => {
   assert.throws(() => importState('not json'));
 });
 
+
+
+test('scenes are stored per preset and normalised', () => {
+  let state = createDefaultState();
+  state = setScene(state, 7, 'scene1', { 'del:0': 0.5, 'mod:1': 0.25 });
+  assert.deepEqual(state.presets['7'].scenes.scene1, { 'del:0': 0.5, 'mod:1': 0.25 });
+  assert.deepEqual(createDefaultState().presets['1'].scenes.scene2, {});
+  state = setScene(state, 7, 'scene2', { 'del:0': 0.2 });
+  assert.equal(assignmentsFor(state, 7).scenes.scene1['del:0'], 0.5);
+  assert.deepEqual(assignmentsFor(state, 9).scenes.scene1, {});
+});
+
+
+test('globals have three assignable scene switches', () => {
+  const g = createDefaultState().globals;
+  assert.deepEqual(g.sceneSwitches.map((s) => s.id), ['S1', 'S2', 'S3']);
+  assert.deepEqual(g.sceneSwitches.map((s) => s.scene), ['base', 'scene1', 'scene2']);
+  assert.equal(g.sceneSwitches[1].trigger.number, 85);
+});
+
+test('fx on/off states are stored per scene', () => {
+  let state = createDefaultState();
+  state = setSceneEnabled(state, 3, 'scene1', { fx1: false, mod: true });
+  assert.deepEqual(assignmentsFor(state, 3).sceneEnabled.scene1, { fx1: false, mod: true });
+  assert.deepEqual(assignmentsFor(createDefaultState(), 3).sceneEnabled.scene2, {});
+});
 
 test('default state has four virtual expression pedals', () => {
   const state = createDefaultState();

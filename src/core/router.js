@@ -32,7 +32,7 @@ export function describeTrigger(trigger) {
 const sameTrigger = (a, b) =>
   a && b && a.type === b.type && a.channel === b.channel && a.number === b.number;
 
-export function createRouter({ globals, getActiveRow, send, onEvent = () => {}, isDevicePort = () => false, getVariant = () => 0 }) {
+export function createRouter({ globals, getActiveRow, send, onEvent = () => {}, isDevicePort = () => false, getVariant = () => 0, onScene = () => {} }) {
   const blockStates = new Map();
   let learn = null;
   let learned = null;
@@ -76,6 +76,13 @@ export function createRouter({ globals, getActiveRow, send, onEvent = () => {}, 
           emit({ type: 'stomp', footswitch: fs.id, block, value });
         }
       }
+    }
+
+    for (const sw of globals.sceneSwitches ?? []) {
+      if (!sameTrigger(sw.trigger, message)) continue;
+      if (message.value !== undefined && message.value < 1) continue;
+      onScene(sw.scene);
+      emit({ type: 'scene', switch: sw.id, scene: sw.scene });
     }
 
     for (const expression of row.expressions ?? []) {

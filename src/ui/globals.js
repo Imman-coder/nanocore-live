@@ -52,6 +52,22 @@ function body(ctx) {
           <button class="small" data-global="learn" data-fs="${pedal.id}">Learn</button>
         </div>
       </div>`).join('')}
+    <h3>Scene switches</h3>
+    <p class="muted small">Each switch recalls the scene you assign it to. Use Learn to capture a MIDI message from your controller.</p>
+    ${(g.sceneSwitches ?? []).map((sw) => `
+      <div class="binding"><div class="field">
+        <label>Name</label><input data-global="scene-name" data-scene-id="${sw.id}" value="${escapeHtml(sw.name)}">
+        <label>Recalls</label><select data-global="scene-target" data-scene-id="${sw.id}">
+          ${['base', 'scene1', 'scene2'].map((v) => `<option value="${v}" ${sw.scene === v ? 'selected' : ''}>${v === 'base' ? 'Base' : `Scene ${v.slice(-1)}`}</option>`).join('')}
+        </select>
+        <label>Trigger</label><select data-global="scene-type" data-scene-id="${sw.id}">
+          ${['cc', 'pc', 'note'].map((t) => `<option value="${t}" ${sw.trigger?.type === t ? 'selected' : ''}>${t.toUpperCase()}</option>`).join('')}
+        </select>
+        <label>Channel</label><input data-global="scene-channel" data-scene-id="${sw.id}" type="number" min="1" max="16" value="${sw.trigger?.channel ?? 1}">
+        <label>Number</label><input data-global="scene-number" data-scene-id="${sw.id}" type="number" min="0" max="127" value="${sw.trigger?.number ?? 0}">
+        <button class="small" data-global="learn" data-fs="${sw.id}">Learn</button>
+        <span class="muted small">${escapeHtml(describeTrigger(sw.trigger))}</span>
+      </div></div>`).join('')}
     <h3>Device</h3>
     <div class="field">
       <label>Firmware (FX type lists)</label>
@@ -92,6 +108,15 @@ function collect() {
     if (input.dataset.global === 'fs-channel') target.trigger = { ...target.trigger, channel: Number(input.value) };
     if (input.dataset.global === 'fs-number') target.trigger = { ...target.trigger, number: Number(input.value) };
   }
+  for (const input of document.querySelectorAll('[data-scene-id]')) {
+    const sw = globals.sceneSwitches?.find((s) => s.id === input.dataset.sceneId);
+    if (!sw) continue;
+    if (input.dataset.global === 'scene-name') sw.name = input.value;
+    if (input.dataset.global === 'scene-target') sw.scene = input.value;
+    if (input.dataset.global === 'scene-type') sw.trigger = { ...sw.trigger, type: input.value };
+    if (input.dataset.global === 'scene-channel') sw.trigger = { ...sw.trigger, channel: Number(input.value) };
+    if (input.dataset.global === 'scene-number') sw.trigger = { ...sw.trigger, number: Number(input.value) };
+  }
   globals.firmware = document.querySelector('[data-global="firmware"]').value;
   globals.midiChannel = Number(document.querySelector('[data-global="midi-channel"]').value);
   globals.recallMethod = document.querySelector('[data-global="recall-method"]').value;
@@ -121,7 +146,8 @@ document.addEventListener('click', (event) => {
         clearInterval(timer);
         const globals = collect();
         const target = globals.footswitches.find((f) => f.id === id)
-          ?? globals.expressionPedals?.find((p) => p.id === id);
+          ?? globals.expressionPedals?.find((p) => p.id === id)
+          ?? globals.sceneSwitches?.find((s) => s.id === id);
         if (target) target.trigger = learned;
         modalCtx.update({ globals });
         openGlobals(modalCtx, modalRender);

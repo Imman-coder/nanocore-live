@@ -109,6 +109,7 @@ th { color: var(--muted); }
 .slider::after { content: ''; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .15s; }
 .switch input:checked + .slider { background: var(--accent-2); }
 .switch input:checked + .slider::after { transform: translateX(20px); }
+.scene-row { margin-bottom: 18px; }
 .radio-row { display: flex; flex-wrap: wrap; gap: 10px; margin: 10px 0 20px; }
 .radio-card { display: flex; flex-direction: column; gap: 4px; min-width: 132px; text-align: left; padding: 12px; border-radius: 10px; background: var(--panel-2); }
 .radio-card.active { border-color: var(--accent); background: #30281b; box-shadow: inset 0 0 0 1px var(--accent); }
@@ -118,8 +119,8 @@ th { color: var(--muted); }
 .param-list .param:hover { transform: translateY(-2px); }
 .param-list .param:hover { border-color: var(--accent); }
 .knob-input { display: none !important; }
-.param { display: block !important; }
-.knob-wrap { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 6px 0; }
+.param { display: flex !important; justify-content: center; align-items: center; }
+.knob-wrap { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; padding: 6px 0; }
 .knob { width: 46px; height: 46px; flex: none; border-radius: 50%; cursor: ns-resize; touch-action: none;
   background: radial-gradient(circle at 35% 30%, #394252, #191e26 70%); border: 2px solid var(--line);
   box-shadow: 0 3px 8px #0008, inset 0 1px 2px #ffffff18; position: relative; }
@@ -127,7 +128,7 @@ th { color: var(--muted); }
 .knob-dial { position: absolute; inset: 3px; border-radius: 50%; transform: rotate(var(--angle, 0deg)); }
 .knob-pointer { position: absolute; left: 50%; top: 4px; width: 3px; height: 15px; margin-left: -1.5px;
   border-radius: 2px; background: var(--accent); box-shadow: 0 0 6px var(--accent); }
-.knob-meta { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 0; }
+.knob-meta { display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 0; }
 .knob-meta label { color: var(--text); font-size: 13px; min-width: 0; }
 .knob-meta .value { color: var(--accent); font-variant-numeric: tabular-nums; }
 .stomp-knob-wrap { margin-bottom: 16px; }

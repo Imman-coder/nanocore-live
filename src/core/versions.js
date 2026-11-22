@@ -86,6 +86,13 @@ export function typesFor(blockId, firmware) {
     });
     types = [...types, ...(EXTRA_TYPES_12[blockId] ?? [])];
   }
+  if (newer && blockId === 'del') {
+    types = types.map((type) => ({
+      ...type,
+      params: type.params.map((param) =>
+        (param.label === 'Time' || param.label === 'Delay') ? { ...param, max: 2000 } : param),
+    }));
+  }
   if (firmware === MODIFIED) types = modifiedTypes(blockId, types);
   return types;
 }

@@ -9,7 +9,7 @@ Unofficial and independent. Not endorsed by Livtra.
 ```bash
 cd /home/anvi/Projects/nanocore-live
 node server.js          # http://localhost:8123
-npm test                # 94 node:test assertions, no dependencies
+npm test                # 99 node:test assertions, no dependencies
 ```
 
 `localhost` is a secure context, so Web MIDI works without HTTPS. For a phone/tablet on the network, serve over HTTPS — Web MIDI will not work over plain HTTP from a remote host.
@@ -46,6 +46,10 @@ The selection is saved in browser storage and re-applied on every connect. If a 
 ## Globals
 
 Footswitch and expression-pedal trigger messages are configured centrally (one incoming CC/PC/note each). **Learn** arms the router and captures the next message from a real pedal. The **firmware** selector (Auto, 1.10, 1.11, 1.12, 1.2, 1.3.5, 1.2-modified) controls which FX types are offered. 1.2 adds the new peak/parallel comp, wah and delay types; `1.2-modified` swaps FX2 pitch (id 8) for the 11-control Octave, MOD Velvet Vibrato for UniVibe, and FX2 Range (id 5) for Octave (±24 st) on 1.12+. Type IDs and ranges for the 17 new effects follow the hardware-confirmed catalogue in `docs/FIRMWARE_VERSION_HISTORY.md`. Controls whose CC is unknown are written with SysEx field `0x01` (effect index, parameter index, float32 normalized) : older firmware hides the later MOD types (10, 11, 12, 17) and FX2 Motion Wah (11). Auto uses the settings-layout byte from `0x65` as a hint (layout 2 → newer list); override it if the hint is wrong. MIDI channel, preset-recall method, and JSON import/export also live here.
+
+## Scenes
+
+The editor has **Base**, **Scene 1** and **Scene 2**. Base holds the values read from the pedal; scene values are stored in browser storage per preset with **Store**. Scenes also store each FX block's on/off state. Recalling compares against the pedal's current values and on/off states and sends only the differences, spaced 25 ms apart so the pedal never sees a burst. Three assignable scene switches in Globals (S1/S2/S3, default CC 84/85/86) recall Base/Scene 1/Scene 2 from a MIDI controller; each has a Learn button and a target dropdown.
 
 ## Protocol facts this app relies on
 

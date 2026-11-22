@@ -18,6 +18,14 @@ export function normalizePreset(preset = {}) {
     expressions: Array.isArray(preset.expressions) ? preset.expressions : [],
     blockStomps: isObject(preset.blockStomps) ? preset.blockStomps : {},
     paramPedals: isObject(preset.paramPedals) ? preset.paramPedals : {},
+    scenes: {
+      scene1: isObject(preset.scenes?.scene1) ? preset.scenes.scene1 : {},
+      scene2: isObject(preset.scenes?.scene2) ? preset.scenes.scene2 : {},
+    },
+    sceneEnabled: {
+      scene1: isObject(preset.sceneEnabled?.scene1) ? preset.sceneEnabled.scene1 : {},
+      scene2: isObject(preset.sceneEnabled?.scene2) ? preset.sceneEnabled.scene2 : {},
+    },
   };
 }
 
@@ -65,10 +73,16 @@ export function createDefaultState() {
         id: `FS${n}`, name: `Stomp ${n}`, trigger: { type: 'cc', channel: 1, number: n + 4 },
       })),
       expressionPedals: defaultPedals(),
+      sceneSwitches: [
+        { id: 'S1', name: 'Base', scene: 'base', trigger: { type: 'cc', channel: 1, number: 84 } },
+        { id: 'S2', name: 'Scene 1', scene: 'scene1', trigger: { type: 'cc', channel: 1, number: 85 } },
+        { id: 'S3', name: 'Scene 2', scene: 'scene2', trigger: { type: 'cc', channel: 1, number: 86 } },
+      ],
     },
     presets: { '1': normalizePreset({ preset: 1 }) },
     activePreset: 1,
     selectedBlock: null,
+    activeScene: 'base',
     expandedBlocks: [],
     mode: 'editor',
     showAdvanced: false,
@@ -87,6 +101,7 @@ export function normalizeState(state) {
   const globals = { ...base.globals, ...(state?.globals ?? {}) };
   if (!Array.isArray(globals.footswitches) || !globals.footswitches.length) globals.footswitches = base.globals.footswitches;
   if (!Array.isArray(globals.expressionPedals) || !globals.expressionPedals.length) globals.expressionPedals = base.globals.expressionPedals;
+  if (!Array.isArray(globals.sceneSwitches) || globals.sceneSwitches.length !== 3) globals.sceneSwitches = base.globals.sceneSwitches;
   return {
     ...base,
     ...state,
@@ -160,6 +175,8 @@ export function assignmentsFor(state, preset) {
     expressions,
     blockStomps: record.blockStomps,
     paramPedals: record.paramPedals,
+    scenes: record.scenes,
+    sceneEnabled: record.sceneEnabled,
   };
 }
 
@@ -186,6 +203,22 @@ export function setParamPedal(state, preset, block, paramIndex, config) {
   const key = `${block}:${paramIndex}`;
   if (config) paramPedals[key] = config; else delete paramPedals[key];
   return updatePreset(state, preset, { paramPedals });
+}
+
+export function setScene(state, preset, name, values) {
+  if (!['scene1', 'scene2'].includes(name)) return state;
+  const record = presetRecord(state, preset);
+  return updatePreset(state, preset, {
+    scenes: { ...record.scenes, [name]: { ...(values ?? {}) } },
+  });
+}
+
+export function setSceneEnabled(state, preset, name, enabled) {
+  if (!['scene1', 'scene2'].includes(name)) return state;
+  const record = presetRecord(state, preset);
+  return updatePreset(state, preset, {
+    sceneEnabled: { ...record.sceneEnabled, [name]: { ...(enabled ?? {}) } },
+  });
 }
 
 export function pedalOwner(state, preset, pedalId) {
