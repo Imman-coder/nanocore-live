@@ -1,0 +1,228 @@
+// Browser-persisted state. Assignments are keyed by the real NANOCORE preset
+// number; the pedal owns preset data, the browser owns MIDI bindings only.
+export const STORAGE_KEY = 'nanocore-live:v1';
+export const STATE_VERSION = 1;
+
+let counter = 0;
+const uid = (prefix) => `${prefix}-${Date.now().toString(36)}-${(counter++).toString(36)}`;
+const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
+
+const defaultPedals = () => [7, 11, 1, 4].map((number, i) => ({
+  id: `E${i + 1}`, name: `Expression ${i + 1}`, trigger: { type: 'cc', channel: 1, number },
+}));
+
+export function normalizePreset(preset = {}) {
+  return {
+    name: preset.name ?? `Preset ${preset.preset ?? 1}`,
+    stomps: Array.isArray(preset.stomps) ? preset.stomps : [],
+    expressions: Array.isArray(preset.expressions) ? preset.expressions : [],
+    blockStomps: isObject(preset.blockStomps) ? preset.blockStomps : {},
+    paramPedals: isObject(preset.paramPedals) ? preset.paramPedals : {},
+  };
+}
+
+function migratePreset(preset) {
+  const result = normalizePreset(preset);
+  if (!Object.keys(result.blockStomps).length) {
+    for (const stomp of result.stomps) {
+      for (const target of stomp.targets ?? []) {
+        if (!target?.block || result.blockStomps[target.block]) continue;
+        result.blockStomps[target.block] = stomp.mode && stomp.mode !== 'value'
+          ? { fs: stomp.fsId, mode: stomp.mode, value: target.value }
+          : stomp.fsId;
+      }
+    }
+  }
+  if (!Object.keys(result.paramPedals).length) {
+    for (const expression of result.expressions) {
+      if (!expression?.target) continue;
+      result.paramPedals[`${expression.target}:${expression.paramIndex ?? 0}`] = {
+        pedal: expression.id,
+        inputMin: expression.inputMin ?? 0,
+        inputMax: expression.inputMax ?? 127,
+        invert: Boolean(expression.invert),
+      };
+    }
+  }
+  return result;
+}
+
+function presetsFromLegacy(state) {
+  const rows = state?.liveSet?.rows;
+  if (!Array.isArray(rows) || !rows.length) return null;
+  return Object.fromEntries(rows.map((row) => [String(row.preset ?? 1), migratePreset(row)]));
+}
+
+export function createDefaultState() {
+  return {
+    version: STATE_VERSION,
+    globals: {
+      midiChannel: 1,
+      firmware: 'auto',
+      settingsLayout: 1,
+      recallMethod: 'sysex',
+      footswitches: [1, 2, 3, 4].map((n) => ({
+        id: `FS${n}`, name: `Stomp ${n}`, trigger: { type: 'cc', channel: 1, number: n + 4 },
+      })),
+      expressionPedals: defaultPedals(),
+    },
+    presets: { '1': normalizePreset({ preset: 1 }) },
+    activePreset: 1,
+    selectedBlock: null,
+    expandedBlocks: [],
+    mode: 'editor',
+    showAdvanced: false,
+  };
+}
+
+export function normalizeState(state) {
+  const base = createDefaultState();
+  const rawPresets = state?.presets && Object.keys(state.presets).length
+    ? state.presets
+    : presetsFromLegacy(state) ?? base.presets;
+  const presets = Object.fromEntries(
+    Object.entries(rawPresets).map(([key, value]) => [String(key), migratePreset(value)]),
+  );
+  const active = Number(state?.activePreset) || Number(Object.keys(presets)[0]) || 1;
+  const globals = { ...base.globals, ...(state?.globals ?? {}) };
+  if (!Array.isArray(globals.footswitches) || !globals.footswitches.length) globals.footswitches = base.globals.footswitches;
+  if (!Array.isArray(globals.expressionPedals) || !globals.expressionPedals.length) globals.expressionPedals = base.globals.expressionPedals;
+  return {
+    ...base,
+    ...state,
+    version: STATE_VERSION,
+    globals,
+    presets,
+    activePreset: active,
+    expandedBlocks: Array.isArray(state?.expandedBlocks) ? state.expandedBlocks : [],
+  };
+}
+
+export function loadState(storage) {
+  try {
+    const raw = storage?.getItem(STORAGE_KEY);
+    if (!raw) return createDefaultState();
+    return importState(raw);
+  } catch {
+    return createDefaultState();
+  }
+}
+
+export function saveState(storage, state) {
+  storage?.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+export function exportState(state) {
+  return JSON.stringify({ ...state, version: STATE_VERSION, exportedAt: new Date().toISOString() }, null, 2);
+}
+
+export function importState(text) {
+  const parsed = typeof text === 'string' ? JSON.parse(text) : text;
+  if (!parsed || parsed.version !== STATE_VERSION) throw new Error('Unsupported state version');
+  if (!parsed.presets && !Array.isArray(parsed.liveSet?.rows)) throw new Error('State has no preset assignments');
+  return normalizeState(parsed);
+}
+
+function presetRecord(state, preset) {
+  return normalizePreset(state.presets[String(preset)] ?? { preset });
+}
+
+// Exposes the new assignment model in the shape the MIDI router consumes.
+export function assignmentsFor(state, preset) {
+  const record = presetRecord(state, preset);
+  const byStomp = new Map();
+  for (const [block, assignment] of Object.entries(record.blockStomps)) {
+    const fsId = typeof assignment === 'string' ? assignment : assignment?.fs;
+    if (!fsId) continue;
+    const mode = typeof assignment === 'string' ? 'value' : (assignment?.mode ?? 'value');
+    const value = typeof assignment === 'object' ? assignment?.value : undefined;
+    const list = byStomp.get(fsId) ?? { fsId, mode, targets: [] };
+    list.targets.push({ block, ...(typeof value === 'number' ? { value } : {}) });
+    byStomp.set(fsId, list);
+  }
+  const expressions = Object.entries(record.paramPedals).flatMap(([key, mapping]) => {
+    const [target, index] = key.split(':');
+    const pedal = (state.globals.expressionPedals ?? []).find((p) => p.id === mapping?.pedal);
+    if (!target || !pedal) return [];
+    return [{
+      id: pedal.id,
+      trigger: pedal.trigger,
+      target,
+      paramIndex: Number(index) || 0,
+      inputMin: mapping.inputMin ?? 0,
+      inputMax: mapping.inputMax ?? 127,
+      invert: Boolean(mapping.invert),
+    }];
+  });
+  return {
+    name: record.name,
+    stomps: [...byStomp.values()],
+    expressions,
+    blockStomps: record.blockStomps,
+    paramPedals: record.paramPedals,
+  };
+}
+
+export function setActivePreset(state, preset) {
+  const number = Math.max(1, Math.min(128, Number(preset) || 1));
+  return { ...state, activePreset: number, selectedBlock: null };
+}
+
+export function updatePreset(state, preset, patch) {
+  const key = String(preset);
+  return { ...state, presets: { ...state.presets, [key]: normalizePreset({ ...presetRecord(state, preset), ...patch }) } };
+}
+
+export function setBlockStomp(state, preset, block, fsId) {
+  const record = presetRecord(state, preset);
+  const blockStomps = { ...record.blockStomps };
+  if (fsId) blockStomps[block] = fsId; else delete blockStomps[block];
+  return updatePreset(state, preset, { blockStomps });
+}
+
+export function setParamPedal(state, preset, block, paramIndex, config) {
+  const record = presetRecord(state, preset);
+  const paramPedals = { ...record.paramPedals };
+  const key = `${block}:${paramIndex}`;
+  if (config) paramPedals[key] = config; else delete paramPedals[key];
+  return updatePreset(state, preset, { paramPedals });
+}
+
+export function pedalOwner(state, preset, pedalId) {
+  const record = presetRecord(state, preset);
+  return Object.entries(record.paramPedals).find(([, mapping]) => mapping?.pedal === pedalId)?.[0] ?? null;
+}
+
+export function setExpressionTrigger(state, pedalId, trigger) {
+  const expressionPedals = (state.globals.expressionPedals ?? []).map((p) =>
+    p.id === pedalId ? { ...p, trigger } : p);
+  return { ...state, globals: { ...state.globals, expressionPedals } };
+}
+
+export function upsertStomp(state, preset, fsId, patch) {
+  const current = assignmentsFor(state, preset).stomps.find((s) => s.fsId === fsId) ?? { fsId, mode: 'value', targets: [] };
+  const next = { ...current, ...patch, fsId };
+  const blockStomps = { ...presetRecord(state, preset).blockStomps };
+  for (const target of next.targets ?? []) {
+    blockStomps[target.block] = next.mode === 'value' ? fsId : { fs: fsId, mode: next.mode, value: target.value };
+  }
+  return updatePreset(state, preset, { blockStomps });
+}
+
+export function upsertExpression(state, preset, expression) {
+  return setParamPedal(state, preset, expression.target, expression.paramIndex ?? 0, {
+    pedal: expression.id,
+    inputMin: expression.inputMin ?? 0,
+    inputMax: expression.inputMax ?? 127,
+    invert: Boolean(expression.invert),
+  });
+}
+
+export function effectiveStompLabel(state, assignments, fsId) {
+  const binding = assignments.stomps.find((s) => s.fsId === fsId);
+  if (binding?.label) return binding.label;
+  const fs = state.globals.footswitches.find((f) => f.id === fsId);
+  return fs?.name ?? fsId;
+}
+
+export { uid };

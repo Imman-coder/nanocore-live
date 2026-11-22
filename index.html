@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NANOCORE Live + Editor</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header id="topbar">
+    <div class="brand">NANOCORE <b>LIVE</b></div>
+    <nav id="mode-switch" aria-label="Mode">
+      <button data-mode="editor" class="active">Editor</button>
+      <button data-mode="live">Live</button>
+    </nav>
+    <div class="transport">
+      <select id="transport-kind" aria-label="Transport">
+        <option value="webmidi">USB MIDI / paired Bluetooth MIDI</option>
+        <option value="webbluetooth">Direct Bluetooth (Web Bluetooth)</option>
+      </select>
+      <button id="connect">Connect</button>
+      <span id="status" class="status offline">Disconnected</span>
+    </div>
+    <button id="open-devices" class="ghost">MIDI devices</button>
+    <button id="open-globals" class="ghost">Globals</button>
+  </header>
+
+  <main>
+    <aside id="sidebar"></aside>
+    <section id="content"></section>
+  </main>
+
+  <footer id="logbar">
+    <span class="log-title">MIDI</span>
+    <div id="log"></div>
+    <button id="clear-log" class="ghost small">Clear</button>
+  </footer>
+
+  <div id="modal" hidden></div>
+
+  <script type="module" src="/src/ui/app.js"></script>
+</body>
+</html>

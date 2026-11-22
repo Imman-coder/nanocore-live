@@ -1,0 +1,506 @@
+NanoCore MIDI findings and mappings — consolidated
+==================================================
+
+Compiled from the tracked repository only. This file gathers MIDI/control
+findings that are otherwise spread across protocol notes, decompilations,
+evidence receipts, tool scripts and build docs. It is a research index, not a
+new protocol specification and not an API contract.
+
+Evidence grades used below (see the repo-capability grading rules):
+
+  [F]  synthetic fixture — exercised a real host library against a fake
+       peripheral; not device behaviour.
+  [S]  static decompilation / disassembly — C-like analysis, not buildable
+       firmware; runtime behaviour unproven unless separately observed.
+  [E]  emulation / host test — executed in a harness; no physical CPU timing
+       or audio proof.
+  [P]  physical readback/observation — bytes or frames from real hardware.
+  [U]  user-reported listening/appearance — observation, not a measurement.
+
+A mixed claim keeps its lower grade. Version-specific findings are marked
+with the firmware version; do not transfer them to another release.
+
+Three separate numbering namespaces
+-----------------------------------
+
+Do not mix these up; the repo explicitly warns about this
+(docs/protocol.txt:23-24):
+
+* Host API IDs — decimal integers passed to the ToneCommand/Livtra native
+  library (for example 20, 21, 27, 153).
+* Wire opcodes — hexadecimal values inside NC70/71 SysEx requests
+  (for example 0x40, 0x41, 0x63, 0x65).
+* MIDI CC numbers — 0..127 in standard MIDI Control Change messages
+  (for example CC43/44 = 0x2B/0x2C, CC73 = 0x49).
+* Effect IDs, subtypes and parameter indices — preset/UI/DSP identifiers,
+  a fourth namespace used by the preset records and UI hooks.
+
+Physical USB and MIDI identity
+------------------------------
+
+[P] docs/physical-investigation.txt, evidence/physical-runtime-summary.json
+
+* Runtime device: USB VID:PID 33C3:1301, manufacturer Ember, product Nanocore,
+  bcdDevice 0x0001. bcdDevice does not prove a firmware version.
+* Synthetic CoreMIDI display name used by the fixture: "Nanocore Midi".
+  Native paths check both USB and MIDI identity (USBVendorProduct 0x33C31301).
+* Runtime configuration: 302 bytes, five interfaces, all Audio class:
+  audio control, stereo playback, stereo capture, audio control for MIDI,
+  MIDI streaming. 2-channel 16-bit PCM at 44100 Hz on the tested 1.10 device.
+* MIDI bulk endpoints 03/83, 64-byte maximum packets. Audio endpoints 02/81,
+  184-byte maximum packets. No serial, mass storage, vendor-specific or
+  runtime DFU interface was exposed in that configuration.
+* DFU/bootloader identity after the detach frame: 33C3:6678, Livtra Lupgrader.
+  This is a different USB configuration, not the normal MIDI runtime.
+* [S] Firmware 1.2 changes audio to 48 kHz and adds a three-byte feedback
+  endpoint 0x82; see docs/firmware-1.2-audio.txt. Do not assume the 1.10
+  descriptor numbers apply to 1.2.
+
+NC70/71 SysEx framing
+---------------------
+
+[F] docs/protocol.txt:15-20; [P] docs/physical-investigation.txt:29-34
+
+* Request:  F0 7D 4E 43 70 PACK(inner) F7
+* Reply:    F0 7D 4E 43 71 PACK(inner) F7 (discriminator byte 0x71)
+* inner request  = version 0x02, sequence LE16, opcode LE16,
+                   payloadLength LE16, payload
+* inner response = version 0x02, sequence LE16, opcode LE16,
+                   status U8, length LE16, payload
+* PACK: groups of up to 7 bytes; emit a high-bit bitmap byte, then the low
+  7 bits of each group byte. The firmware helper is nc_sysex_unpack_7bit
+  at 0x40013674 in the 1.10 tree (firmware/protocol/midi.c).
+* No checksum or encryption was observed at the framing layer.
+* Status codes are command-specific. Readiness status 3 maps to ready in the
+  fixture, status 6 to false in a static branch, status 0 was an error for
+  that request; do not generalize.
+* [F] Fixture replies were synchronous. Real timing, concurrency and
+  notification handling remain unvalidated.
+* [P] An independent CoreMIDI listener captured 20 packets during settings,
+  snapshot and preset-1 reads on the physical 1.10 pedal. Reassembly gave
+  five NC71 replies, all status 0, with validated declared lengths. This
+  corroborates the framing and 7-bit packing independently of the host
+  JSON parser.
+
+Raw MIDI stream parsing (on-device)
+------------------------------------
+
+[S] firmware/versions/1.12/protocol/midi_stream.c:
+    nc_midi_parse_stream 0x40029386, nc_midi_dispatch_message 0x40028fc2
+[S] firmware/versions/1.11/protocol/midi_stream.c:
+    nc_midi_parse_stream 0x40028672, nc_midi_dispatch_message 0x400282ae
+
+* The parser consumes byte streams with running status, stores the pending
+  status byte and expected data-byte count, and resets on new status bytes.
+* 0xF0 starts SysEx capture; 0xF7 terminates it. Realtime bytes >= 0xF8 are
+  skipped/allowed inside SysEx; tools/custom_fx/midi_frames.py implements
+  the same bounded reassembly on the host side.
+* Dispatch handles status nibbles 0x80 (note off), 0x90 (note on), 0xB0
+  (control change), 0xC0 (program change), 0xF2 (song position) and 0xF3
+  (song select). Channel is carried in the low nibble.
+* Only the 0xB0 path is where the CC mapping below lives; the final line of
+  dispatch calls nc_midi_control_change with channel, CC number and value.
+  The decompiled name "NRPN data" appears in the 1.11/1.12 module ledgers for
+  parts of this dispatch, but the exact semantics of those branches are not
+  established (tools/firmware_source/modules-1.11.json, modules-1.12.json).
+
+DFU detach is a different MIDI frame
+------------------------------------
+
+[P/F] docs/protocol.txt:57-64, docs/firmware-readback.txt:32-33,
+      evidence/normal-runtime-summary.json
+
+* Normal-to-bootloader transition sends the legacy SysEx frame:
+  F0 7D 44 46 55 01 F7
+* This is NOT the NC70/71 request protocol. The device then re-enumerates as
+  33C3:6678 and DFU begins. Real detach/re-enumeration timing was not
+  validated in the fixture.
+* web/app.js:59-62 uses Web MIDI with sysex permission to find a port whose
+  name matches /nanocore/i and send exactly this frame. The browser installer
+  otherwise uses WebUSB against 33C3:6678 (web/dfu.js USB_FILTER).
+* Do not invoke native API 17 merely to inspect the transition: it
+  transitions and immediately begins an upload (docs/physical-investigation.txt).
+
+Host API IDs -> wire opcodes
+----------------------------
+
+[F] docs/protocol.txt:26-36, evidence/normal-runtime-summary.json:api_to_wire_opcodes
+
+  API ID (decimal)  Wire opcode(s)     Observed meaning
+  ----------------  -----------------  -------------------------------
+  16                (none, device enum) dfu:false, kind:nanocore,
+                                        midi:true, runtime_pid:4865
+  4                 0x30               AMP summary; 0x36 slot-info fallback
+  9                 0x50               IR summary; 0x56 fallback
+                                        (fixture incomplete)
+  20                0x63 then 0x40     preset-name pages
+  21 {s:slot}       0x63 then 0x41     preset chunk reads
+  27                0x65               global settings
+  39                0x68               route state
+  40                0x63               eight-slot current-effect snapshot
+  153               0x46 with FF       readiness
+  17                (MIDI detach)      firmware update / DFU transition
+
+The fixture executed 71 native calls, 64 preset backups and 128 preset
+chunk reads against a fake peripheral. evidence/normal-runtime-summary.json
+records fixture_only:true and physical_device:false. No write/save API is
+present in this mapping.
+
+Registered request handlers (1.10 research tree)
+------------------------------------------------
+
+[S] tools/firmware_source/modules.json, firmware/symbols.tsv,
+    firmware/protocol/{midi,preset_commands,amp_commands,ir_commands}.c
+
+Core dispatch and framing, 1.10:
+  0x40013674  nc_sysex_unpack_7bit
+  0x40013750  nc_register_opcode_handler
+  0x40013760  nc_register_message_listener      (max 8 listeners)
+  0x40013b2e  nc_dispatch_request
+
+Preset family, 1.10:
+  0x40012a2a  nc_handle_preset_list_names       opcode 0x40
+  0x400129fa  nc_handle_preset_read_chunk       opcode 0x41
+  0x4001299a  nc_handle_opcode_42               opcode 0x42
+  0x4001296a  nc_handle_opcode_43               opcode 0x43
+  0x4001293a  nc_handle_opcode_44               opcode 0x44
+  0x4001290a  nc_handle_opcode_45               opcode 0x45
+  0x400128da  nc_handle_preset_readiness        opcode 0x46
+  0x400129ca  nc_handle_opcode_48               opcode 0x48
+  0x400128aa  nc_handle_opcode_49               opcode 0x49
+
+AMP/IR family, 1.10:
+  0x4008b6ec  nc_handle_opcode_35               opcode 0x35
+  0x4008addc  nc_handle_amp_slot_info           opcode 0x36
+  0x400876b6  nc_handle_opcode_37               opcode 0x37
+  0x40087c44  nc_handle_opcode_38               opcode 0x38
+  0x4008a640  nc_handle_amp_read_chunk          opcode 0x39
+  0x40087844  nc_handle_opcode_3a               opcode 0x3a
+  0x4008d91c  nc_handle_opcode_3b               opcode 0x3b
+  0x4008ba94  nc_handle_opcode_55               opcode 0x55
+  0x4008a9f4  nc_handle_ir_slot_info            opcode 0x56
+  0x40087706  nc_handle_opcode_57               opcode 0x57
+  0x4008a28c  nc_handle_opcode_59               opcode 0x59
+  0x40087b30  nc_handle_opcode_5a               opcode 0x5a
+  0x400883d4  nc_handle_opcode_5b               opcode 0x5b
+
+1.11 / 1.12 MIDI modules, reviewed names and addresses:
+  1.11  0x4002da2e nc_submit_slot_command
+        0x400282ae nc_midi_dispatch_message
+        0x40028672 nc_midi_parse_stream
+        0x4002de68 nc_midi_control_change
+  1.12  0x4002e8f2 nc_submit_slot_command
+        0x40028fc2 nc_midi_dispatch_message
+        0x40029386 nc_midi_parse_stream
+        0x4002ed2c nc_midi_control_change
+
+All of these are C-like decompilation from disassembly, not original source
+or buildable firmware. Generic opcode names stay generic until behaviour is
+proven; a named handler is not automatically a usable API.
+
+MIDI CC mapping in the firmware
+-------------------------------
+
+[S] firmware/versions/1.12/protocol/control_change.c:41 (0x4002ed2c)
+[S] firmware/versions/1.11/protocol/control_change.c:41 (0x4002de68)
+[S] docs/firmware-version-comparison.rst:64-75,188
+[U/vendor note] evidence/firmware-release-notes.json
+
+Gate and channel handling:
+* The handler returns immediately unless a global enable byte is nonzero:
+  1.12 DAT_30079e60, 1.11 DAT_3007AE18.
+* Channel must be 1..16: code computes channel-1 (mod 256) and rejects >15.
+* Values are masked to 7 bits before use.
+
+Direct raw writes (semantics not established):
+* CC 0x00 writes value&0x7F to 0x30079E38[channel-1] on 1.12
+  (0x3007ADF0 on 1.11).
+* CC 0x20 writes to 0x30079E28[channel-1] on 1.12
+  (0x3007ADE0 on 1.11).
+
+Ten-entry CC lookup table:
+* CC 0x14..0x1D (decimal 20..29) and CC 0x28..0x31 (40..49) index a
+  10-byte table: 1.12 0x4009C544, 1.11 0x4009729C. A value of -1 means
+  unused.
+* For 0x14..0x1D, the table value is passed to a setter with (value & 0x7F)
+  >> 6, i.e. the top two bits of the CC value.
+* For 0x28..0x31, the low 7 bits are passed to another setter. If the table
+  value is 6, values above 6 are rejected and a nonzero high nibble adds 1
+  to the index (an enum-quantization quirk), then the setter is called.
+  Setter addresses: 1.12 0x4002E92C / 0x4002E954;
+  1.11 0x4002DA68 / 0x4002DA90.
+
+CC43 and CC44 (0x2B / 0x2C):
+* These submit a two-byte slot command: 0x2B selects command 6, 0x2C
+  command 7. Value must be <= 29 (0x1D). Submission helper is
+  nc_submit_slot_command (1.12 0x4002E8F2, 1.11 0x4002DA2E).
+* Vendor 1.11 release note: "Fixed MIDI CC 43 and CC 44 not responding for
+  AMP and IR switching." Static comparison shows 1.10 at 0x4002D05E routed
+  this region through generic effect selection while 1.11 added the
+  dedicated branch, retained in 1.12. Physical switching was NOT exercised
+  here. Suggested discriminating check: CC43/44 values 0, 29 and 30 with
+  slot readback on each release.
+
+Grouped parameter CCs (final call is value/127, group, param):
+The handler ends by calling FUN_4002E990 on 1.12 (0x4002DACC on 1.11)
+with (CCvalue & 0x7F)/127, a group number and a parameter index. The
+ranges below are taken directly from the decompiled branch structure;
+group names are not established by the repo.
+
+  CC range (hex / decimal)  group  param index source / notes
+  ------------------------  -----  -----------------------------
+  0x21 / 33                 7      7           special case
+  0x32 / 50                 0      0           gated on a mode read
+  0x33..0x38 / 51..56       0      CC-0x33    mode 2/3 has special handling
+  0x39..0x3B / 57..59       1      CC-0x39    gated on a count read
+  0x3C..0x40 / 60..64       2      CC-0x3C
+  0x41..0x43 / 65..67       3      CC-0x41
+  0x44..0x49 / 68..73       5      CC-0x44    CC73 => param 5 (see Octave)
+  0x4A..0x4F / 74..79       4      CC-0x4A
+  0x51..0x54 / 81..84       --     --          value>=0x40 branch,
+                                              two helper calls
+  0x55..0x5A / 85..90       6      CC-0x55
+  0x5B..0x60 / 91..96       7      CC-0x5B
+  0x50 / 80                 --     --          special flag/allocation path
+
+* CC 0x44..0x49 maps to group 5 with parameter index CC-0x44. The Octave
+  build's ATTACK is control index 5, which is consistent with the observed
+  CC73 -> ATTACK result below, but the group's vendor-facing name is not
+  established. Treat this as corroboration, not a decoded table.
+* Some branches call helpers whose names/types remain opaque
+  (FUN_40023402, FUN_40025C82, FUN_4002EB1E, FUN_4002EB92, FUN_4002E990
+  on 1.12). Do not treat them as known user APIs.
+
+Learn-like per-channel map in the stream parser
+-----------------------------------------------
+
+[S] firmware/versions/1.12/protocol/midi_stream.c:70-171,
+    firmware/versions/1.11/protocol/midi_stream.c:70-171
+
+Inside the 0xB0 dispatch, before the CC mapping above, the firmware
+maintains 16 records of 0x18 bytes each, indexed channel*0x180, based at
+0x3006C420 on 1.12 (0x3006C120 on 1.11):
+
+  CC 99  (0x63)  stores a high byte of a two-byte CC number
+  CC 98  (0x62)  stores the low byte
+  CC 6          commits the pair and calls FUN_40028FAE (1.12) /
+                FUN_4002818C (1.11), sets flags and timestamp
+  CC 38  (0x26)  clears all 16 channel records and marks one entry
+  CC 100/101     clear a two-byte flag field at record+4 (the bytes set
+                 by CC99/0x62), then continue
+  Other values   call a clear helper and continue
+
+This looks like a MIDI-learn style RAM map, but persistence, storage in
+presets, and any user-facing configuration path are NOT established. Do not
+build a mapping tool on it without further evidence. These CC numbers are
+MIDI CC values, not the NC wire opcodes 0x63/0x62/0x06/0x26 used elsewhere.
+
+Preset layout relevant to live control
+--------------------------------------
+
+[F] docs/protocol.txt:42-55, evidence/visual-session/gui-api-fixtures.json
+[P] docs/physical-investigation.txt:21-33, evidence/physical-runtime-summary.json
+
+* 64 preset slots. Physical 1.10 read: 40 valid, 24 empty; active slot 1
+  "Ambient". AMP catalog: 38 slots of 12288 bytes; IR: 30 slots of 4096
+  bytes. Catalog sizes are asset allocation evidence, not flash geometry.
+* Opcode 0x40 lists names: request [first, count], observed pages [0,8] ...
+  [56,8]; record [slot, validFlag, name8].
+* Opcode 0x41 reads a preset: request [slotU8, offsetLE16, maxLengthU8],
+  max 200; response [slot, offset, totalLengthLE16, chunkBytes]. Host
+  requires total 1..1024, stable total, bounded chunks and forward progress.
+* Physical preset-1 read returned 270 bytes across two chunks (205 and 75
+  bytes including 5-byte chunk headers). Synthetic fixture used 206 bytes
+  with offsets 0 and 200.
+* Records are TLVs [tagU8, lengthU8, payload]. Unknown tags survive in
+  extraTlvs; the fixture preserved tag 240 with 190 bytes. No authoritative
+  tag registry is published; do not impose another product's schema.
+* Host-visible preset fields in the parsed fixture: name, version,
+  presetVolume, synthMode, chainOrder[8], slots[8] with
+  {effectId, variant, enabled, params[], tempoSync[]}, ampSlot, irSlot,
+  fx2Slot, runtimeEffects[], expressionMappings[], extraTlvs[].
+* Settings read (opcode 0x65) includes midiChannel in the fixture (value 0).
+  It is a read result only; no write path is validated.
+* Preset JSON backups are explicitly not raw firmware and not verified
+  restorable full backups. No preset-write command was sent in any test.
+  Do not scan numeric opcodes: neighbouring operations include saves and
+  resets (docs/physical-investigation.txt:51-52).
+
+Project-added control mappings (not vendor stock)
+-------------------------------------------------
+
+These are mappings implemented by this project's patches. They change what
+an existing effect slot's controls mean; they are not a plugin API.
+
+UniVibe, MOD10 replacement
+[E/U] docs/custom-fx-univibe-controls.txt, docs/custom-fx-univibe-ui.txt,
+      evidence/custom-fx-univibe-ui.json,
+      evidence/custom-fx-univibe-controls-flash.json
+
+* Control order: SPEED, DEPTH, LEVEL, MODE. DSP receives them as params 0..3.
+* Defaults: [0.35, 0.8, 0.5, 0]. New defaults apply on selection; existing
+  saved preset values are not migrated.
+* SPEED = 0.2 + 5.8*x^2 Hz (default ~0.91 Hz).
+* DEPTH = modulation excursion 0..1 (default 80).
+* LEVEL = linear 0..2 output gain; 50 = unity, 100 = +6.02 dB (default 50).
+* MODE = 0 CHORUS (equal dry/wet), 1 VIBRATO (wet-only). Native enum path
+  emits exactly two states, normalized 0 and 1000; UI threshold is <0.5
+  CHORUS and >=0.5 VIBRATO for other input paths.
+* UI patch sites on 1.10: MOD10 count hook 0x400263D6, enum metadata hook
+  0x4001A956, label tables 0x40094914 and 0x40094640, defaults body
+  0x40072036..0x400720AE, formatter 0x40027606..0x40027652.
+  Version-specific equivalents are in tools/custom_fx/vibe_ui_versions.json.
+* Emulation checks: 760 count cases, 912 enum cases, 12 label cases,
+  13 default lengths, 20 formatter cases. Physical 1.10 flash returned
+  exact 868352-byte readback and normal MIDI/runtime ready; UI appearance
+  and sound await user confirmation.
+
+Octave, FX2 subtype8 replacement
+[E/P/U] firmware/custom-fx/octave/README.rst,
+        evidence/octave-full-controls-integration.json,
+        docs/octave-device-test.txt, docs/investigation-history.rst
+
+* Eleven controls in order: DRY, -2 OCT, -1 OCT, +1 OCT, +2 OCT, ATTACK,
+  LOWPASS, DETUNE, DRY FX, RESON, LEVEL.
+* Mappings/defaults: 0..1 for the voice gains; ATTACK 0..2000 ms; LOWPASS
+  150..18000 Hz; DETUNE 0..30 cents; DRY FX prototype modes 0..3; RESON
+  four choices; LEVEL 0..2 with internal -9 dB output gain (50% = unity).
+* Native parameter bank capacity is 12, but the FX2 writer originally
+  rejected indices above 4. A subtype8-only gate at 0x4000BEE6 permits
+  indices 0..10; other subtypes keep the original limits. 156 native
+  setter cases passed in emulation.
+* [P] First physical probe: "Live CC41=8 and CC21=127 selected/enabled
+  OCTAVE without saving the preset." Controls read back as .65, 0, .5.
+  That build failed timing and was not a listening claim.
+* [P] Later guarded image: CC73 updated ATTACK; tested value .323 = 646 ms.
+  First guarded image had CC73 writes rejected until the setter gate was
+  added (evidence/octave-full-controls-integration.json:live_findings).
+* [U/P] App-closed 180.13 s run, 124771 active callbacks, 54 MIDI changes
+  across dry, four octave gains and attack, zero deadline misses, zero
+  guard faults; 16.6% observed timing margin. One recorded configuration,
+  not a worst-case guarantee. User reported it sounds "pretty good."
+* Keep ToneCommand closed with OCTAVE; app-open timing spikes remain
+  unresolved. The guard latches bypass until reboot; no preset was saved
+  in these tests.
+
+Bounded OCT? telemetry and historical SPL reader
+-------------------------------------------------
+
+[S/E/P] tools/custom_fx/read_octave_telemetry.py,
+        tools/firmware_probe/README.txt, docs/octave-device-test.txt,
+        docs/firmware-1.2-octave-dsp.txt
+
+* Experimental Octave firmware answers a bounded diagnostic request on
+  wire opcode 0x39 with payload b'OCT?'. The host packs it into the normal
+  NC70 frame, expects an NC71 reply with matching sequence, opcode 0x39,
+  version 2 and status 0. Accepted reply lengths: 128, 144, 216, 192 and
+  264 bytes, with schema magic 0x4F435431 ("OCT1") and schema versions 1..5.
+  Fields cover timer frequency, audio counters, heap boundaries, octave
+  calls/ticks, fault latch and control count. This is a diagnostic, not a
+  preset or general memory reader.
+* [S] 1.12 native diagnostic handler used for the extension: 0x4007FB52
+  (registration 0x400802B0..0x400802BC). On 1.2 the same bounded OCT?
+  path is ported to handler 0x4007FB52; heap total/free/highwater fields
+  15..17 are zero placeholders and have NOT been mapped on 1.2.
+* [S/P] Historical 1.10 SPL reader replaced the AMP-read handler at
+  0x4008A640 (opcode 0x39) with a 252-byte diagnostic: request is LE32
+  SPL offset + U8 length, length 1..200, end <= 0x26000. It called native
+  FAL helpers at 0x40006EFA and 0x40006F5E using scratch RAM 0x3008A56C.
+  The original AMP read was unavailable while installed. This diagnostic
+  was restored and is not part of current firmware.
+* Careful: opcode 0x39 is used both by the native AMP-read family and by
+  these bounded extensions; the payload identifies the extension. It is
+  also numerically the host API ID for route state, which maps to wire
+  opcode 0x68. Keep the namespaces separate.
+
+Browser/tool support that already exists
+----------------------------------------
+
+* web/app.js:8,59-62 requires WebUSB, Web MIDI and a secure context, then
+  requests MIDIAccess with sysex:true to send the DFU detach frame.
+  It does not implement live control or NC70/71 reads.
+* web/tests/dfu.test.js and tools/custom_fx/test_midi_frames.py test the
+  DFU transport and SysEx frame reassembly. web/tests also cover firmware,
+  octave, recovery and storage, but not a live-control protocol client.
+* tools/custom_fx/midi_frames.py is a bounded CoreMIDI SysEx reassembler;
+  it skips realtime bytes >= 0xF8 and resyncs on malformed frames.
+* tools/custom_fx/read_octave_telemetry.py uses macOS CoreMIDI directly;
+  it sends only the bounded OCT? request and performs no writes or
+  arbitrary memory reads.
+* tools/nanocore_dfu/uploader.py targets DFU identity 33C3:6678 only.
+
+Not established / do not assume
+-------------------------------
+
+* No verified preset write, preset save, CC-map write or settings write
+  command is documented. A read-only plus known-control-message client is
+  the safe layer.
+* No general MIDI remap API, no MIDI-learn persistence proof, no RAM loader
+  and no arbitrary-address read primitive were found.
+* Control maps are version-specific. 1.11 added CC43/44; 1.12 retained it;
+  1.10 routed that region generically. Capability does not transfer.
+* CC ranges in the grouped table are static decompilation. Only CC43/44
+  (release note + handler change), CC73 (patched Octave), CC41/CC21
+  (patched Octave, selection without save) and the OCT? diagnostic have
+  physical or user-observed support. Treat other CC numbers as research
+  hypotheses to be verified by snapshot diffing, not as a shipping map.
+* Emulation and host tests prove chosen values/formatting/frame handling;
+  they do not prove physical screen rendering, CPU timing or audio.
+* Decompiled vendor code, vendor-derived patch bytes and decompiled source
+  reconstructions are excluded from the project's MIT grant
+  (LICENSE_SCOPE.md). Do not bundle them into a redistributed app without
+  checking that scope.
+
+Source index
+------------
+
+Primary protocol and identity:
+  docs/protocol.txt
+  docs/physical-investigation.txt
+  docs/evidence-gallery.rst
+  evidence/normal-runtime-summary.json
+  evidence/physical-runtime-summary.json
+  evidence/visual-session/gui-api-fixtures.json
+  evidence/firmware-release-notes.json
+
+Decompiled MIDI/CC code:
+  firmware/protocol/midi.c
+  firmware/protocol/preset_commands.c
+  firmware/versions/1.11/protocol/control_change.c
+  firmware/versions/1.11/protocol/midi_stream.c
+  firmware/versions/1.12/protocol/control_change.c
+  firmware/versions/1.12/protocol/midi_stream.c
+  tools/firmware_source/modules.json
+  tools/firmware_source/modules-1.11.json
+  tools/firmware_source/modules-1.12.json
+
+Version and control-change history:
+  docs/firmware-version-comparison.rst
+  docs/investigation-history.rst
+  docs/firmware-readback.txt
+  docs/firmware-decoding.txt
+  docs/firmware-1.2-audio.txt
+  docs/firmware-1.2-octave-dsp.txt
+
+Custom control mappings and evidence:
+  docs/custom-fx-univibe-controls.txt
+  docs/custom-fx-univibe-ui.txt
+  firmware/custom-fx/README.rst
+  firmware/custom-fx/octave/README.rst
+  docs/octave-device-test.txt
+  evidence/custom-fx-univibe-ui.json
+  evidence/custom-fx-univibe-controls-flash.json
+  evidence/octave-full-controls-integration.json
+  evidence/octave-half-rate-headroom-1.12.json
+  evidence/octave-device-1.12.json
+
+Tools and browser code:
+  tools/custom_fx/midi_frames.py
+  tools/custom_fx/test_midi_frames.py
+  tools/custom_fx/read_octave_telemetry.py
+  tools/custom_fx/vibe_ui.py
+  tools/firmware_probe/README.txt
+  tools/nanocore_dfu/uploader.py
+  web/app.js
+  web/dfu.js
+  web/tests/dfu.test.js
