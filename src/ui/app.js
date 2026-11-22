@@ -6,7 +6,8 @@ import {
   setBlockStomp, setParamPedal, pedalOwner, setExpressionTrigger,
 } from '../core/store.js';
 import { createRouter, describeTrigger } from '../core/router.js';
-import { buildRequestSysEx, parseSysEx, ResponseAssembler, COMMAND, FIELD } from '../core/messages.js';
+import { createMidiScheduler } from '../core/scheduler.js';
+import { buildCc, buildRequestSysEx, parseSysEx, ResponseAssembler, COMMAND, FIELD } from '../core/messages.js';
 import { parseSnapshot } from '../core/snapshot.js';
 import { COMMAND as CAT, parsePresetCatalog, parseStorageInfo, parseSlotInfo, parseGlobalSettings, activeSlotFor } from '../core/catalog.js';
 import { resolveFirmware } from '../core/versions.js';
@@ -31,8 +32,8 @@ let lastReply = null;
 let lastSnapshotPreset = null;
 let deviceBaseline = null;
 let deviceBaselineEnabled = null;
+const localEnabled = new Map();
 const MIDI_GAP_MS = 25;
-let sendChain = Promise.resolve();
 const names = { presets: new Map(), amp: null, ir: null };
 const logLines = [];
 
@@ -62,16 +63,20 @@ function setStatus(text, online = false) {
   el.classList.toggle('offline', !online);
 }
 
-function send(bytes) {
-  // The pedal cannot process a burst of messages, so every write is spaced out.
-  const task = sendChain.then(async () => {
+// One scheduler for every write to the pedal: 25 ms spacing plus coalescing
+// of rapid sweeps of the same control to the last value in the window.
+const scheduler = createMidiScheduler({
+  writer: (bytes) => {
     if (!transport) throw new Error('Connect to the NANOCORE first');
     transport.send(bytes);
     log('→ ' + [...bytes].map((b) => b.toString(16).padStart(2, '0')).join(' '));
-    await new Promise((resolve) => setTimeout(resolve, MIDI_GAP_MS));
-  });
-  sendChain = task.catch(() => {});
-  return task;
+  },
+  gapMs: MIDI_GAP_MS,
+  coalesceMs: MIDI_GAP_MS,
+});
+
+function send(bytes) {
+  return scheduler.send(bytes);
 }
 
 function sendRequest(command, payload = [], timeout = 3000) {
@@ -112,10 +117,20 @@ function syncPresetFromDevice() {
 function applySnapshot(parsed) {
   const presetChanged = lastSnapshotPreset !== null && lastSnapshotPreset !== parsed.activePreset;
   lastSnapshotPreset = parsed.activePreset;
-  snapshot = parsed;
   deviceBaseline = Object.fromEntries(parsed.blocks.flatMap((block) =>
     block.params.map((value, index) => [`${block.id}:${index}`, value])));
   deviceBaselineEnabled = Object.fromEntries(parsed.blocks.map((block) => [block.id, block.enabled]));
+  snapshot = parsed;
+  // A snapshot read right after a stomp can still report the old on/off state.
+  // Keep locally confirmed changes authoritative briefly so scenes store what
+  // the user actually selected.
+  const now = Date.now();
+  for (const block of snapshot.blocks) {
+    const override = localEnabled.get(block.id);
+    if (!override) continue;
+    if (now - override.at < 3000) block.enabled = override.on;
+    else localEnabled.delete(block.id);
+  }
   syncPresetFromDevice();
   for (const block of snapshot.blocks) router.setBlockState(block.id, block.enabled);
   render();
@@ -183,7 +198,10 @@ const router = createRouter({
       const meter = document.getElementById(`expr-meter-${index}`);
       if (meter) meter.style.width = `${Math.round((event.value / 127) * 100)}%`;
     }
-    if (event.type === 'stomp') setTimeout(render, 0);
+    if (event.type === 'stomp') {
+      ctx.noteEnabled(event.block, event.value === 127);
+      setTimeout(render, 0);
+    }
   },
 });
 
@@ -414,6 +432,7 @@ const ctx = {
   noteEnabled(blockId, on) {
     const block = snapshot?.blocks.find((b) => b.id === blockId);
     if (block) block.enabled = Boolean(on);
+    localEnabled.set(blockId, { on: Boolean(on), at: Date.now() });
   },
   noteParameter(blockId, paramIndex, normalized) {
     const block = snapshot?.blocks.find((b) => b.id === blockId);

@@ -9,7 +9,7 @@ Unofficial and independent. Not endorsed by Livtra.
 ```bash
 cd /home/anvi/Projects/nanocore-live
 node server.js          # http://localhost:8123
-npm test                # 99 node:test assertions, no dependencies
+npm test                # 106 node:test assertions, no dependencies
 ```
 
 `localhost` is a secure context, so Web MIDI works without HTTPS. For a phone/tablet on the network, serve over HTTPS — Web MIDI will not work over plain HTTP from a remote host.
@@ -49,7 +49,7 @@ Footswitch and expression-pedal trigger messages are configured centrally (one i
 
 ## Scenes
 
-The editor has **Base**, **Scene 1** and **Scene 2**. Base holds the values read from the pedal; scene values are stored in browser storage per preset with **Store**. Scenes also store each FX block's on/off state. Recalling compares against the pedal's current values and on/off states and sends only the differences, spaced 25 ms apart so the pedal never sees a burst. Three assignable scene switches in Globals (S1/S2/S3, default CC 84/85/86) recall Base/Scene 1/Scene 2 from a MIDI controller; each has a Learn button and a target dropdown.
+The editor has **Base**, **Scene 1** and **Scene 2**. Base holds the values read from the pedal; scene values are stored in browser storage per preset with **Store**. Scenes also store each FX block's on/off state. Recalling compares against the pedal's current values and on/off states and sends only the differences, spaced 25 ms apart so the pedal never sees a burst. Three assignable scene switches in Globals (S1/S2/S3, default CC 84/85/86) recall Base/Scene 1/Scene 2 from a MIDI controller; each has a Learn button and a target dropdown. **All** writes to the pedal — knobs, stomps, presets and scenes — go through `src/core/scheduler.js`: 25 ms minimum spacing, plus coalescing of repeated writes to the same CC/SysEx target inside that window (only the last value is sent).
 
 ## Protocol facts this app relies on
 

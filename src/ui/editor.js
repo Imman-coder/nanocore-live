@@ -103,7 +103,8 @@ function detail(ctx, blockId, live) {
       ${['base', 'scene1', 'scene2'].map((scene) => `<button class="radio-card ${ctx.state.activeScene === scene ? 'active' : ''}"
         data-action="select-scene" data-scene="${scene}">
         <b>${scene === 'base' ? 'Base' : `Scene ${scene.slice(-1)}`}</b>
-        <span class="muted small">${scene === 'base' ? 'pedal values' : `${Object.keys(ctx.assignments.scenes?.[scene] ?? {}).length} stored`}</span></button>`).join('')}
+        <span class="muted small">${scene === 'base' ? 'pedal values'
+          : `${Object.keys(ctx.assignments.scenes?.[scene] ?? {}).length} values · ${Object.keys(ctx.assignments.sceneEnabled?.[scene] ?? {}).length} fx`}</span></button>`).join('')}
       <button class="radio-card" data-action="store-scene" data-scene="${ctx.state.activeScene}">
         <b>Store to ${ctx.state.activeScene === 'base' ? 'Base' : `Scene ${ctx.state.activeScene.slice(-1)}`}</b>
         <span class="muted small">save current values here</span></button>
