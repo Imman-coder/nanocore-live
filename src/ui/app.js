@@ -233,6 +233,9 @@ async function loadAssetNames(kind) {
   try {
     const info = parseStorageInfo((await sendRequest(infoCommand, [], 3000)).payload);
     slotCount = info.slotCount;
+    // The user-facing amp selector has 30 models; higher slots are drive/fuzz
+    // models and are not part of that list.
+    if (kind === 'amp') slotCount = Math.min(slotCount, 30);
     storageActive = info.activeSlot;
   } catch (error) {
     log(`${kind} info: ${error.message} (using defaults)`);
@@ -246,14 +249,16 @@ async function loadAssetNames(kind) {
   // even if the remaining slot reads are still in flight.
   const list = new Array(slotCount).fill(null);
   names[kind] = list;
+  let lastSlotError = null;
+  let failuresLogged = 0;
 
   async function readSlot(slot) {
-    for (let attempt = 0; attempt < 2; attempt++) {
+    for (let attempt = 0; attempt < 3; attempt++) {
       try {
         const reply = await sendRequest(slotCommand, [slot], 1500);
         return parseSlotInfo(reply.payload, slot).name || null;
       } catch (error) {
-        if (attempt === 1 && slot === activeSlot) log(`${kind} slot ${slot}: ${error.message}`);
+        lastSlotError = error.message;
       }
     }
     return null;
@@ -266,6 +271,11 @@ async function loadAssetNames(kind) {
   for (let slot = 0; slot < slotCount; slot++) {
     if (slot === first) continue;
     list[slot] = (await readSlot(slot)) ?? `Slot ${slot}`;
+    if (list[slot].startsWith('Slot ') && failuresLogged < 3) {
+      log(`${kind} slot ${slot}: ${lastSlotError ?? 'empty name'}`);
+      failuresLogged++;
+    }
+    render();
   }
   render();
   return list;
@@ -341,6 +351,12 @@ const ctx = {
   presetLabel,
   assetNames(kind) { return loadAssetNames(kind); },
   refreshAssetNames,
+  setChainOrder(order) {
+    const indices = order.map((id) => SNAPSHOT_BLOCKS.indexOf(id));
+    if (indices.length !== 8 || indices.some((i) => i < 0)) return;
+    send(buildRequestSysEx(COMMAND.SET_FIELD, [FIELD.CHAIN_ORDER, 8, ...indices]));
+    setTimeout(readSnapshot, 300);
+  },
   setParameter(blockId, paramIndex, normalized) {
     const effectIndex = SNAPSHOT_BLOCKS.indexOf(blockId);
     if (effectIndex === -1) return;

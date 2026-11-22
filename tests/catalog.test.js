@@ -53,6 +53,13 @@ test('asset slot info rejects a malformed reply', () => {
 
 
 
+
+test('slot info accepts a longer-than-30-byte reply and decodes the name', () => {
+  const payload = [12, 1, 1, ...u32(9000), ...u32(123456), ...u16(6682), 0,
+    ...ascii('MesR2', 16), 0xaa, 0xbb];
+  assert.equal(parseSlotInfo(payload, 12).name, 'MesR2');
+});
+
 test('slot info rejects a reply for a different slot and stops the name at 0xff', () => {
   const payload = [12, 1, 1, ...u32(9000), ...u32(123456), ...u16(6682), 0,
     ...ascii('MesR2', 5), 0xff, 0xff, ...new Array(9).fill(0xff)];

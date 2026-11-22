@@ -65,7 +65,7 @@ function body(ctx) {
       <input data-global="midi-channel" type="number" min="1" max="16" value="${g.midiChannel ?? 1}">
       <label>Preset recall</label>
       <select data-global="recall-method">
-        <option value="sysex" ${g.recallMethod !== 'pc' ? 'selected' : ''}>SysEx 0x6d field 09</option>
+        <option value="sysex" ${g.recallMethod !== 'pc' ? 'selected' : ''}>Device preset recall</option>
         <option value="pc" ${g.recallMethod === 'pc' ? 'selected' : ''}>Program Change</option>
       </select>
     </div>

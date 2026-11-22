@@ -70,7 +70,7 @@ test('new effect ranges follow the verified 1.3.5 catalogue', () => {
 test('modified firmware maps FX2 Range slot to Pitch on 1.12+', () => {
   const fx2 = typesFor('fx2', '1.2-modified');
   const pitch = fx2.find((t) => t.id === 5);
-  assert.equal(pitch.name, 'Pitch');
+  assert.equal(pitch.name, 'Octave');
   assert.deepEqual([pitch.params[0].min, pitch.params[0].max], [-24, 24]);
 });
 

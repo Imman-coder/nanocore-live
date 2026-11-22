@@ -4,6 +4,7 @@ import { BLOCK_BY_ID, chainBlockIds } from '../core/spec.js';
 import { buildCc, buildRequestSysEx, COMMAND } from '../core/messages.js';
 import { ccToEnum, enumToCc } from '../core/scaling.js';
 import { openPedalPopup } from './pedal-popup.js';
+import { renderKnob } from './knob.js';
 import { typesFor } from '../core/versions.js';
 
 let currentCtx = null;
@@ -45,10 +46,10 @@ export function renderEditor(ctx) {
     const assetName = id === 'amp' ? ctx.names.amp?.[slot] : id === 'cab' ? ctx.names.ir?.[slot] : null;
     const stomp = ctx.assignments.blockStomps[id];
     const fsId = typeof stomp === 'string' ? stomp : stomp?.fs;
-    return `<button class="chain-row ${id === selected ? 'selected' : ''}" data-action="select-block" data-block="${id}">
+    return `<button class="chain-row ${id === selected ? 'selected' : ''}" data-action="select-block" data-block="${id}" draggable="true" title="Click to edit · drag to reorder">
       <span class="chain-pos">${position + 1}</span>
-      <span class="chain-name">${escapeHtml(block.name)}${assetName ? ` <small>${escapeHtml(assetName)}</small>` : ''}</span>
-      <span class="chain-type">${escapeHtml(assetName || type?.name || '—')}</span>
+      <span class="chain-name">${escapeHtml(block.name)}</span>
+      <span class="chain-type">${escapeHtml(assetName || type?.name || (id === 'amp' || id === 'cab' ? 'loading…' : '—'))}</span>
       <span class="chain-state">${live.enabled ? 'ON' : 'off'}</span>
       <span class="pill">${fsId ? escapeHtml(fsId) : 'no stomp'}</span>
     </button>`;
@@ -56,11 +57,11 @@ export function renderEditor(ctx) {
 
   return `<h2>Editor <span class="muted small">— NANOCORE preset ${preset}</span></h2>
     ${header}
-    <h3>Effect chain <span class="muted small">— signal path</span></h3>
+    <h3>Effect chain <span class="muted small">— drag blocks to reorder, click to edit</span></h3>
     <div class="chain-strip">${chain.map((id, i) => `${i ? '<span class="chain-arrow">→</span>' : ''}${rows[i] ?? ''}`).join('')}</div>
     <div class="detail-card card">${detail(ctx, selected, byId[selected])}</div>
     <div class="card"><h3>Save</h3>
-      <p class="small muted">Writes the pedal's live RAM into NANOCORE preset ${preset} using SysEx opcode 0x46.</p>
+      <p class="small muted">Writes the pedal's current live state permanently into NANOCORE preset ${preset}.</p>
       <button id="save-preset" class="primary">Save to pedal</button>
     </div>`;
 }
@@ -122,29 +123,118 @@ function escapeHtml(s) {
 function paramRow(ctx, blockId, param, normalized, index) {
   const n = typeof normalized === 'number' && Number.isFinite(normalized) ? normalized : 0;
   const mapping = ctx.assignments.paramPedals[`${blockId}:${index}`];
-  const ccBadge = param.cc === null ? '<span class="pill">CC unknown</span>' : '';
-  const badge = `${ccBadge}${mapping
+  const badge = mapping
     ? `<span class="pedal-badge">${escapeHtml(mapping.pedal)} · ${mapping.inputMin ?? 0}–${mapping.inputMax ?? 127}${mapping.invert ? ' · inv' : ''}</span>`
-    : ''}`;
-  let control;
+    : '';
+  const id = `param-${blockId}-${index}`;
+  const common = `data-edit="param" data-block="${blockId}" data-index="${index}" data-cc="${param.cc}"`;
+  let knob;
   if (param.kind === 'enum') {
     const options = param.options ?? [];
     const selected = ccToEnum(Math.round(n * 127), options);
-    control = `<select data-edit="param" data-block="${blockId}" data-index="${index}" data-kind="enum" data-cc="${param.cc}" data-options="${escapeHtml(JSON.stringify(options))}">
-      ${options.map((o, i) => `<option value="${i}" ${i === selected ? 'selected' : ''}>${escapeHtml(o)}</option>`).join('')}
-    </select>`;
+    knob = renderKnob({
+      id, value: selected, max: Math.max(1, options.length - 1),
+      label: `${escapeHtml(param.label)} ${badge}`, display: escapeHtml(options[selected] ?? ''),
+      data: `${common} data-kind="enum" data-options="${escapeHtml(JSON.stringify(options))}" data-step-label="${escapeHtml(options.join('|'))}"`,
+    });
   } else {
     const value = param.min + n * (param.max - param.min);
-    control = `<input type="range" min="0" max="127" value="${Math.round(n * 127)}"
-      data-edit="param" data-block="${blockId}" data-index="${index}" data-kind="range"
-      data-cc="${param.cc}" data-min="${param.min}" data-max="${param.max}" data-decimals="${param.decimals ?? 2}">
-      <span class="value">${value.toFixed(param.decimals ?? 2)}${param.unit ? ' ' + escapeHtml(param.unit) : ''}</span>`;
+    const decimals = param.decimals ?? 2;
+    knob = renderKnob({
+      id, value: Math.round(n * 127), max: 127,
+      label: `${escapeHtml(param.label)} ${badge}`,
+      display: `${value.toFixed(decimals)}${param.unit ? ' ' + escapeHtml(param.unit) : ''}`,
+      data: `${common} data-kind="range" data-min="${param.min}" data-max="${param.max}" data-decimals="${decimals}" data-unit="${escapeHtml(param.unit ?? '')}"`,
+    });
   }
   return `<div class="param" data-param-block="${blockId}" data-param-index="${index}"
     data-param-label="${escapeHtml(param.label)}" title="Right-click to assign an expression pedal">
-    <label>${escapeHtml(param.label)} ${badge}</label>${control}
+    ${knob}
   </div>`;
 }
+
+let draggedBlock = null;
+let dragOrder = null;
+let dragOriginal = null;
+let dragRows = null;
+let dragDropped = false;
+
+function paintOrder(rows) {
+  const strip = document.querySelector('.chain-strip');
+  if (!strip) return;
+  const arrows = [...strip.querySelectorAll('.chain-arrow')];
+  const before = new Map([...strip.children].map((el) => [el, el.getBoundingClientRect().left]));
+  strip.replaceChildren();
+  rows.forEach((row, i) => {
+    strip.append(row);
+    if (i < rows.length - 1) strip.append(arrows[i]);
+  });
+  for (const el of strip.children) {
+    const old = before.get(el);
+    if (old === undefined) continue;
+    const dx = old - el.getBoundingClientRect().left;
+    if (Math.abs(dx) > 1) {
+      el.animate([{ transform: `translateX(${dx}px)` }, { transform: 'translateX(0)' }],
+        { duration: 200, easing: 'cubic-bezier(.2,.8,.2,1)' });
+    }
+  }
+}
+
+document.addEventListener('dragstart', (event) => {
+  const row = event.target.closest?.('.chain-row');
+  if (!row) return;
+  dragRows = [...document.querySelectorAll('.chain-strip .chain-row')];
+  dragOriginal = [...dragRows];
+  dragOrder = dragRows.map((r) => r.dataset.block);
+  dragDropped = false;
+  draggedBlock = row.dataset.block;
+  row.classList.add('dragging');
+  event.dataTransfer?.setData('text/plain', draggedBlock);
+});
+
+document.addEventListener('dragend', () => {
+  if (!dragDropped && dragOriginal) paintOrder(dragOriginal);
+  draggedBlock = null;
+  dragOrder = null;
+  dragOriginal = null;
+  dragRows = null;
+  document.querySelectorAll('.chain-row.dragging, .chain-row.drag-over').forEach((el) =>
+    el.classList.remove('dragging', 'drag-over'));
+});
+
+document.addEventListener('dragover', (event) => {
+  const row = event.target.closest?.('.chain-row');
+  if (!row || !draggedBlock || !dragOrder) return;
+  event.preventDefault();
+  for (const other of document.querySelectorAll('.chain-row.drag-over')) other.classList.remove('drag-over');
+  row.classList.add('drag-over');
+  const target = row.dataset.block;
+  const next = dragOrder.filter((block) => block !== draggedBlock);
+  if (!next.includes(target)) return;
+  const rect = row.getBoundingClientRect();
+  const after = event.clientX > rect.left + rect.width / 2;
+  next.splice(next.indexOf(target) + (after ? 1 : 0), 0, draggedBlock);
+  if (next.join() === dragOrder.join()) return;
+  dragOrder = next;
+  paintOrder(next.map((block) => dragRows.find((r) => r.dataset.block === block)));
+});
+
+document.addEventListener('dragleave', (event) => {
+  const row = event.target.closest?.('.chain-row');
+  if (row) row.classList.remove('drag-over');
+});
+
+document.addEventListener('drop', (event) => {
+  const ctx = currentCtx;
+  if (!draggedBlock || !ctx?.snapshot || !event.target.closest?.('.chain-strip')) return;
+  event.preventDefault();
+  const order = [...document.querySelectorAll('.chain-strip .chain-row')].map((row) => row.dataset.block);
+  dragDropped = true;
+  document.querySelectorAll('.chain-row.dragging, .chain-row.drag-over').forEach((el) =>
+    el.classList.remove('dragging', 'drag-over'));
+  ctx.setChainOrder(order);
+  draggedBlock = null;
+});
 
 document.addEventListener('click', (event) => {
   const ctx = currentCtx;
@@ -179,7 +269,8 @@ document.addEventListener('input', (event) => {
     currentCtx?.send(buildCc(currentCtx.state.globals.midiChannel ?? 1, Number(el.dataset.cc), value));
   }
   const real = Number(el.dataset.min) + (value / 127) * (Number(el.dataset.max) - Number(el.dataset.min));
-  el.nextElementSibling.textContent = `${real.toFixed(Number(el.dataset.decimals))}`;
+  const display = el.parentElement?.querySelector('.knob-meta .value');
+  if (display) display.textContent = `${real.toFixed(Number(el.dataset.decimals))}${el.dataset.unit ?? ''}`;
 });
 
 document.addEventListener('change', (event) => {

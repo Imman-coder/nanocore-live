@@ -47,7 +47,7 @@ export function resolveFirmware(state) {
 function modifiedTypes(blockId, types) {
   return types.map((type) => {
     if (blockId === 'fx2' && type.id === 5) {
-      return { ...type, slug: 'pitch', name: 'Pitch', description: 'Modified firmware (1.12+): the Range slot carries Pitch', params: MODIFIED_PITCH_PARAMS };
+      return { ...type, slug: 'pitch', name: 'Octave', description: 'Modified firmware (1.12+): the Range slot carries Octave', params: MODIFIED_PITCH_PARAMS };
     }
     if (blockId === 'fx2' && type.slug === 'pitch') {
       return { ...type, slug: 'octave', name: 'Octave', description: 'Modified firmware: 11-voice octave replacement', params: OCTAVE_PARAMS };

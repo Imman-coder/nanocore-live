@@ -57,7 +57,7 @@ export function parseStorageInfo(payload) {
 }
 
 export function parseSlotInfo(payload, expectedSlot = null) {
-  if (payload.length !== 30) throw new Error('Asset slot metadata must be 30 bytes');
+  if (payload.length < 30) throw new Error('Asset slot metadata must be at least 30 bytes');
   const present = payload[1];
   const active = payload[2];
   if (present !== 0 && present !== 1) throw new Error('Invalid asset slot flags');
