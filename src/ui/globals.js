@@ -7,12 +7,22 @@ const escapeHtml = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&a
 let modalCtx = null;
 let modalRender = null;
 
+const globalsRoot = () => document.querySelector('[data-globals-root]');
+export function initGlobals(ctx, rerender) { modalCtx = ctx; if (rerender) modalRender = rerender; }
+export const globalsBody = (ctx) => body(ctx);
+
+function refreshGlobals() {
+  const root = globalsRoot();
+  if (root && modalCtx) root.innerHTML = body(modalCtx);
+  else openGlobals(modalCtx, modalRender);
+}
+
 export function openGlobals(ctx, rerender) {
   modalCtx = ctx;
   modalRender = rerender;
   const modal = document.querySelector('#modal');
   modal.hidden = false;
-  modal.innerHTML = `<div class="modal-box">
+  modal.innerHTML = `<div class="modal-box" data-globals-root>
     <div class="modal-head"><h2>Globals</h2><button class="small" data-global="close">Close</button></div>
     ${body(ctx)}
   </div>`;
@@ -71,8 +81,6 @@ function body(ctx) {
       <span class="muted small">${escapeHtml(describeTrigger(tap.trigger))}</span>
     </div>
     <h3>Scenes</h3>
-    <div class="field"><label><input type="checkbox" data-global="base-override" ${g.baseOverride ? 'checked' : ''}> Base scene override</label>
-      <span class="muted small">Let Base store the current values like the other scenes. Stored in memory only.</span></div>
     <p class="muted small">Base is always available. Choose up to six total scenes and name each one.</p>
     <div class="field">
       <label>Number of scenes</label>
@@ -126,7 +134,8 @@ function body(ctx) {
 function collect() {
   const ctx = modalCtx;
   const globals = structuredClone(ctx.state.globals);
-  for (const input of document.querySelectorAll('[data-global]')) {
+  const root = globalsRoot() ?? document;
+  for (const input of root.querySelectorAll('[data-global]')) {
     const fs = input.dataset.fs;
     if (!fs) continue;
     const target = globals.footswitches.find((f) => f.id === fs)
@@ -137,7 +146,7 @@ function collect() {
     if (input.dataset.global === 'fs-channel') target.trigger = { ...target.trigger, channel: Number(input.value) };
     if (input.dataset.global === 'fs-number') target.trigger = { ...target.trigger, number: Number(input.value) };
   }
-  for (const input of document.querySelectorAll('[data-scene-id]')) {
+  for (const input of root.querySelectorAll('[data-scene-id]')) {
     const sw = globals.sceneSwitches?.find((s) => s.id === input.dataset.sceneId);
     if (!sw) continue;
     if (input.dataset.global === 'scene-name') sw.name = input.value;
@@ -146,7 +155,7 @@ function collect() {
     if (input.dataset.global === 'scene-channel') sw.trigger = { ...sw.trigger, channel: Number(input.value) };
     if (input.dataset.global === 'scene-number') sw.trigger = { ...sw.trigger, number: Number(input.value) };
   }
-  const tapInputs = [...document.querySelectorAll('[data-tap]')];
+  const tapInputs = [...root.querySelectorAll('[data-tap]')];
   if (tapInputs.length && globals.tapTempoSwitch) {
     for (const input of tapInputs) {
       if (input.dataset.tap === 'type') globals.tapTempoSwitch.trigger = { ...globals.tapTempoSwitch.trigger, type: input.value };
@@ -154,14 +163,13 @@ function collect() {
       if (input.dataset.tap === 'number') globals.tapTempoSwitch.trigger = { ...globals.tapTempoSwitch.trigger, number: Number(input.value) };
     }
   }
-  globals.baseOverride = document.querySelector('[data-global="base-override"]').checked;
-  globals.interactiveLive = document.querySelector('[data-global="interactive-live"]').checked;
-  globals.tempoSync = document.querySelector('[data-global="tempo-sync"]').checked;
-  globals.tempo = { ...(globals.tempo ?? {}), subdivision: document.querySelector('[data-global="tempo-subdivision"]').value };
-  globals.sceneCount = Number(document.querySelector('[data-global="scene-count"]').value);
-  globals.firmware = document.querySelector('[data-global="firmware"]').value;
-  globals.midiChannel = Number(document.querySelector('[data-global="midi-channel"]').value);
-  globals.recallMethod = document.querySelector('[data-global="recall-method"]').value;
+  globals.interactiveLive = Boolean(root.querySelector('[data-global="interactive-live"]')?.checked);
+  globals.tempoSync = Boolean(root.querySelector('[data-global="tempo-sync"]')?.checked);
+  globals.tempo = { ...(globals.tempo ?? {}), subdivision: root.querySelector('[data-global="tempo-subdivision"]')?.value ?? globals.tempo?.subdivision };
+  globals.sceneCount = Number(root.querySelector('[data-global="scene-count"]')?.value ?? globals.sceneCount);
+  globals.firmware = root.querySelector('[data-global="firmware"]')?.value ?? globals.firmware;
+  globals.midiChannel = Number(root.querySelector('[data-global="midi-channel"]')?.value ?? globals.midiChannel);
+  globals.recallMethod = root.querySelector('[data-global="recall-method"]')?.value ?? globals.recallMethod;
   return globals;
 }
 
@@ -171,10 +179,13 @@ document.addEventListener('click', (event) => {
   switch (button.dataset.global) {
     case 'close':
       document.querySelector('#modal').hidden = true;
+      const settings = document.querySelector('#topbar-menu');
+      if (settings) settings.hidden = true;
       break;
     case 'save':
       modalCtx.update({ globals: normalizeState({ ...modalCtx.state, globals: collect() }).globals });
       document.querySelector('#modal').hidden = true;
+      document.querySelector('#topbar-menu').hidden = true;
       modalRender?.();
       break;
     case 'learn': {
@@ -193,7 +204,7 @@ document.addEventListener('click', (event) => {
           ?? (globals.tapTempoSwitch?.id === id ? globals.tapTempoSwitch : null);
         if (target) target.trigger = learned;
         modalCtx.update({ globals: normalizeState({ ...modalCtx.state, globals }).globals });
-        openGlobals(modalCtx, modalRender);
+        refreshGlobals();
         modalCtx.notify(`Learned ${describeTrigger(learned)} for ${id}`);
       }, 120);
       break;
@@ -213,7 +224,7 @@ document.addEventListener('click', (event) => {
     case 'reset':
       if (window.confirm('Reset all bindings stored in this browser?')) {
         modalCtx.update(createDefaultState());
-        openGlobals(modalCtx, modalRender);
+        refreshGlobals();
       }
       break;
   }

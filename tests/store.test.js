@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   createDefaultState, loadState, saveState, exportState, importState,
   setActivePreset, updatePreset, upsertStomp, upsertExpression,
-  setBlockStomp, setParamPedal, pedalOwner, setScene, setSceneEnabled, setSceneBlock,
+  setBlockStomp, setParamPedal, pedalOwner, setScene, setSceneEnabled, setSceneBlock, setBase,
   effectiveStompLabel, assignmentsFor, normalizeState, renameScene,
 } from '../src/core/store.js';
 
@@ -15,6 +15,14 @@ function memoryStorage(initial = {}) {
     removeItem: (k) => map.delete(k),
   };
 }
+
+test('the app opens on the Start page', () => {
+  assert.equal(createDefaultState().mode, 'start');
+});
+
+test('the transport choice is persisted', () => {
+  assert.equal(createDefaultState().globals.transportKind, 'webmidi');
+});
 
 test('default state has four footswitches and preset 1 selected', () => {
   const state = createDefaultState();
@@ -140,6 +148,16 @@ test('tempo settings default to a 4/4 eighth-note sync', () => {
 test('interactive live mode is an opt-in global', () => {
   assert.equal(createDefaultState().globals.interactiveLive, false);
   assert.equal(normalizeState({ globals: { interactiveLive: true } }).globals.interactiveLive, true);
+});
+
+test('Base scene values are persisted per preset and preset changes return to Base', () => {
+  let state = createDefaultState();
+  assert.deepEqual(state.presets['1'].base, { values: {}, enabled: {} });
+  state = setBase(state, 1, { 'mod:0': 0.5 }, { mod: true });
+  assert.deepEqual(state.presets['1'].base.values, { 'mod:0': 0.5 });
+  state = setActivePreset(state, 2);
+  assert.equal(state.activeScene, 'base');
+  assert.deepEqual(assignmentsFor(state, 2).base, { values: {}, enabled: {} });
 });
 
 test('base override is an opt-in global defaulting to off', () => {

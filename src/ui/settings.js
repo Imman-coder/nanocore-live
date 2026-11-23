@@ -1,0 +1,100 @@
+// Settings popup: connection, MIDI devices and Globals in one tabbed window.
+import { devicesBody, initDevices } from './devices.js';
+import { globalsBody, initGlobals } from './globals.js';
+
+let activeTab = 'connection';
+let settingsCtx = null;
+let devicesScanned = false;
+
+const TABS = [
+  { id: 'connection', label: 'Connection' },
+  { id: 'devices', label: 'MIDI devices' },
+  { id: 'globals', label: 'Globals' },
+];
+
+function connectionPanel(ctx) {
+  return `<div class="transport">
+      <button id="connect">${ctx.connected ? 'Disconnect' : 'Connect'}</button>
+      <span id="status" class="status ${ctx.connected ? 'online' : 'offline'}">${ctx.statusText()}</span>
+    </div>
+    <div class="field">
+      <label for="transport-kind">Transport</label>
+      <select id="transport-kind" aria-label="Transport" onchange="window.__nanocoreCtx.setTransportKind(this.value)">
+        <option value="webmidi" ${ctx.state.globals.transportKind === 'webbluetooth' ? '' : 'selected'}>USB MIDI / paired Bluetooth MIDI</option>
+        <option value="webbluetooth" ${ctx.state.globals.transportKind === 'webbluetooth' ? 'selected' : ''}>Direct Bluetooth (Web Bluetooth)</option>
+      </select>
+    </div>
+    <p class="muted small" id="capability-hint">${ctx.connectionHint()}</p>
+    <p class="muted small">Last device reply: ${ctx.lastReply ?? 'none'}</p>`;
+}
+
+function panel(ctx) {
+  if (activeTab === 'devices') {
+    initDevices(ctx);
+    return `<p class="muted small">Select the NANOCORE ports before connecting — the choice is saved in this browser.</p>
+      <button data-devices-scan>Scan MIDI devices</button>
+      <div data-devices-root>${devicesBody(ctx)}</div>`;
+  }
+  if (activeTab === 'globals') {
+    initGlobals(ctx, () => renderSettings(ctx));
+    return `<div data-globals-root>${globalsBody(ctx)}</div>`;
+  }
+  return connectionPanel(ctx);
+}
+
+export function renderSettings(ctx) {
+  settingsCtx = ctx;
+  const root = document.querySelector('#topbar-menu .modal-box');
+  if (!root) return;
+  root.innerHTML = `<div class="modal-head"><h2>Settings</h2><button class="small" data-settings-close>Close</button></div>
+    <div class="settings-tabs" role="tablist">
+      ${TABS.map((tab) => `<button role="tab" aria-selected="${tab.id === activeTab}" class="${tab.id === activeTab ? 'active' : ''}" data-settings-tab="${tab.id}">${tab.label}</button>`).join('')}
+    </div>
+    <div class="settings-panel">${panel(ctx)}</div>
+    <div class="settings-footer">
+      ${activeTab === 'devices' ? '<button class="primary" data-settings-save="devices">Save ports</button>' : ''}
+      ${activeTab === 'globals' ? '<button class="primary" data-settings-save="globals">Save globals</button>' : ''}
+      <button data-settings-close>Close</button>
+    </div>`;
+  if (activeTab === 'devices' && !devicesScanned && !ctx.connected
+      && (ctx.state.globals.transportKind ?? 'webmidi') !== 'webbluetooth' && ctx.scanPorts) {
+    devicesScanned = true;
+    Promise.resolve(ctx.scanPorts()).then(() => renderSettings(ctx)).catch(() => {
+      devicesScanned = false;
+      renderSettings(ctx);
+    });
+  }
+}
+
+export function openSettingsTab(ctx, tab = 'connection') {
+  activeTab = tab;
+  renderSettings(ctx);
+  const menu = document.querySelector('#topbar-menu');
+  if (menu) menu.hidden = false;
+}
+
+document.addEventListener('click', (event) => {
+  if (!settingsCtx) return;
+  const tab = event.target.closest('[data-settings-tab]');
+  if (tab) {
+    activeTab = tab.dataset.settingsTab;
+    renderSettings(settingsCtx);
+    return;
+  }
+  const save = event.target.closest('[data-settings-save]');
+  if (save) {
+    const root = document.querySelector('#topbar-menu');
+    if (save.dataset.settingsSave === 'devices') root?.querySelector('[data-devices-root] [data-dev="save"]')?.click();
+    else root?.querySelector('[data-globals-root] [data-global="save"]')?.click();
+    return;
+  }
+  if (event.target.closest('[data-devices-scan]')) {
+    devicesScanned = true;
+    Promise.resolve(settingsCtx.scanPorts?.()).finally(() => renderSettings(settingsCtx));
+    return;
+  }
+  if (event.target.closest('[data-settings-close]')) {
+    const menu = document.querySelector('#topbar-menu');
+    if (menu) menu.hidden = true;
+  }
+});

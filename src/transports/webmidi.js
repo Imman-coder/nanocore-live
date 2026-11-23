@@ -4,6 +4,7 @@
 export function createWebMidiTransport({ navigator: nav = globalThis.navigator, deviceNamePattern = /nanocore/i, sysex = true } = {}) {
   let access = null;
   let output = null;
+  let connected = false;
   let selection = { deviceInputId: null, deviceOutputId: null, enabledInputIds: null };
   const controllerListeners = new Set();
   const deviceListeners = new Set();
@@ -68,16 +69,23 @@ export function createWebMidiTransport({ navigator: nav = globalThis.navigator, 
     kind: 'webmidi',
     get output() { return output; },
     get access() { return access; },
+    get connected() { return connected; },
     get selection() { return { ...selection }; },
-    async connect() {
+    async scan() {
       if (typeof nav?.requestMIDIAccess !== 'function') throw new Error('Web MIDI is not available in this browser');
-      access = await nav.requestMIDIAccess({ sysex });
+      if (!access) access = await nav.requestMIDIAccess({ sysex });
       access.onstatechange = () => { selectOutput(); wireInputs(); };
       selectOutput();
       wireInputs();
       return listPorts();
     },
+    async connect() {
+      await this.scan();
+      connected = true;
+      return listPorts();
+    },
     disconnect() {
+      connected = false;
       if (access) access.onstatechange = null;
       for (const input of access?.inputs?.values() ?? []) input.onmidimessage = null;
       access = null;

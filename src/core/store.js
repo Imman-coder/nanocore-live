@@ -28,6 +28,10 @@ export function normalizePreset(preset = {}) {
     sceneNames: Object.fromEntries(USER_SCENE_KEYS.map((key, i) =>
       [key, preset.sceneNames?.[key] || `Scene ${i + 1}`])),
     sceneBlocks: isObject(preset.sceneBlocks) ? { ...preset.sceneBlocks } : {},
+    base: {
+      values: isObject(preset.base?.values) ? { ...preset.base.values } : {},
+      enabled: isObject(preset.base?.enabled) ? { ...preset.base.enabled } : {},
+    },
     scenes: Object.fromEntries(USER_SCENE_KEYS.map((key) =>
       [key, isObject(preset.scenes?.[key]) ? preset.scenes[key] : {}])),
     sceneEnabled: Object.fromEntries(USER_SCENE_KEYS.map((key) =>
@@ -80,6 +84,7 @@ export function createDefaultState() {
       })),
       expressionPedals: defaultPedals(),
       baseOverride: false,
+      transportKind: 'webmidi',
       interactiveLive: false,
       tempoSync: true,
       tempo: { bpm: null, signature: '4/4', subdivision: '1/8' },
@@ -92,7 +97,7 @@ export function createDefaultState() {
     selectedBlock: null,
     activeScene: 'base',
     expandedBlocks: [],
-    mode: 'editor',
+    mode: 'start',
     showAdvanced: false,
   };
 }
@@ -195,12 +200,13 @@ export function assignmentsFor(state, preset) {
     scenes: record.scenes,
     sceneEnabled: record.sceneEnabled,
     sceneBlocks: record.sceneBlocks,
+    base: record.base,
   };
 }
 
 export function setActivePreset(state, preset) {
   const number = Math.max(1, Math.min(128, Number(preset) || 1));
-  return { ...state, activePreset: number, selectedBlock: null };
+  return { ...state, activePreset: number, selectedBlock: null, activeScene: 'base' };
 }
 
 export function updatePreset(state, preset, patch) {
@@ -244,6 +250,13 @@ export function setSceneEnabled(state, preset, name, enabled) {
   const record = presetRecord(state, preset);
   return updatePreset(state, preset, {
     sceneEnabled: { ...record.sceneEnabled, [name]: { ...(enabled ?? {}) } },
+  });
+}
+
+export function setBase(state, preset, values, enabled) {
+  const record = presetRecord(state, preset);
+  return updatePreset(state, preset, {
+    base: { values: { ...(values ?? {}) }, enabled: { ...(enabled ?? {}) } },
   });
 }
 

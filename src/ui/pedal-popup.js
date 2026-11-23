@@ -40,6 +40,7 @@ function render() {
       <button class="small" data-popup="close">Close</button>
     </div>
     <p class="muted small">One pedal can drive only one parameter in this preset. Right-click another parameter to reassign it.</p>
+    ${target.cc === null ? '<p class="small" style="color:#e6b980">⚠ This parameter has no documented CC — it uses SysEx. Live sweeps may be less stable and are throttled.</p>' : ''}
     <h3>Pedal</h3>
     <div class="radio-row">
       ${pedals.map((p) => `<button class="radio-card ${p.id === pedal ? 'active' : ''}" data-popup="pedal" data-id="${p.id}">

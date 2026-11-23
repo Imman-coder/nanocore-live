@@ -16,9 +16,10 @@ export function renderEditor(ctx) {
   const header = `<div class="card">
     <div class="card-head">
       <span class="name">Preset ${preset}</span>
-      <input data-editor="preset-name" value="${escapeHtml(ctx.assignments.name)}" placeholder="Preset name (browser only)">
+      <input data-editor="preset-name" value="${escapeHtml(ctx.assignments.name)}" placeholder="Preset name (max 8 characters)">
       <label class="small">NANOCORE preset</label>
       <select id="preset-select">${presetOptions(ctx, preset)}</select>
+      <button data-action="save-preset-name" class="ghost" title="Write this name to the NANOCORE and save the preset">Save name to pedal</button>
       <button id="editor-read">Read snapshot</button>
       <button id="save-preset" class="primary" title="Write live RAM permanently into this NANOCORE preset">Save to pedal</button>
     </div>
@@ -125,11 +126,9 @@ function detail(ctx, blockId, live) {
           <b>${escapeHtml(ctx.sceneName(scene))}</b>
           <span class="muted small">${escapeHtml(detail)}</span></button>`;
       }).join('')}
-      <button class="radio-card" data-action="store-scene" data-scene="${ctx.state.activeScene}"
-        ${ctx.state.activeScene === 'base' && !ctx.state.globals.baseOverride ? 'disabled' : ''}>
+      <button class="radio-card" data-action="store-scene" data-scene="${ctx.state.activeScene}">
         <b>Store to ${ctx.state.activeScene === 'base' ? 'Base' : `Scene ${ctx.state.activeScene.slice(-1)}`}</b>
-        <span class="muted small">${ctx.state.activeScene === 'base' && !ctx.state.globals.baseOverride
-          ? 'enable Base override in Globals' : 'save current values here'}</span></button>
+        <span class="muted small">save current values here</span></button>
     </div>
     <div class="field scene-names">
       ${ctx.sceneKeys().filter((scene) => scene !== 'base').map((scene) => `
@@ -185,7 +184,7 @@ function paramRow(ctx, blockId, param, normalized, index) {
       data: `${common} data-kind="range" data-min="${param.min}" data-max="${param.max}" data-decimals="${decimals}" data-unit="${escapeHtml(param.unit ?? '')}"`,
     });
   }
-  return `<div class="param" data-param-block="${blockId}" data-param-index="${index}"
+  return `<div class="param" data-param-block="${blockId}" data-param-index="${index}" data-param-cc="${param.cc ?? 'null'}"
     data-param-label="${escapeHtml(param.label)}" title="Right-click to assign an expression pedal">
     ${badge ? `<div class="param-assignment">${badge}</div>` : ''}
     ${knob}
@@ -299,6 +298,7 @@ document.addEventListener('contextmenu', (event) => {
     block: row.dataset.paramBlock,
     paramIndex: Number(row.dataset.paramIndex),
     label: row.dataset.paramLabel,
+    cc: row.dataset.paramCc === 'null' ? null : Number(row.dataset.paramCc),
   });
 });
 

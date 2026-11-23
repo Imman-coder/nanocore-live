@@ -3,19 +3,21 @@ import { BLOCK_BY_ID, BLOCKS, FX2_SPECIAL_TYPES, SNAPSHOT_BLOCKS } from '../core
 import {
   loadState, saveState, createDefaultState, setActivePreset, updatePreset,
   upsertStomp, assignmentsFor, effectiveStompLabel, setScene, setSceneEnabled,
-  setBlockStomp, setParamPedal, pedalOwner, setExpressionTrigger, USER_SCENE_KEYS, renameScene, setSceneBlock,
+  setBlockStomp, setParamPedal, pedalOwner, setExpressionTrigger, USER_SCENE_KEYS, renameScene, setSceneBlock, setBase,
 } from '../core/store.js';
 import { createRouter, describeTrigger } from '../core/router.js';
 import { createMidiScheduler } from '../core/scheduler.js';
-import { buildCc, buildRequestSysEx, parseSysEx, ResponseAssembler, COMMAND, FIELD } from '../core/messages.js';
+import { buildCc, buildRequestSysEx, parseSysEx, ResponseAssembler, COMMAND, FIELD, cleanPresetName } from '../core/messages.js';
 import { parseSnapshot } from '../core/snapshot.js';
 import { COMMAND as CAT, parsePresetCatalog, parseStorageInfo, parseSlotInfo, parseGlobalSettings, activeSlotFor } from '../core/catalog.js';
 import { resolveFirmware, typesFor } from '../core/versions.js';
 import { stompActive, toggleCc, sceneStored, sceneBlockParticipates, expressionBytes } from '../core/live.js';
-import { captureBase, baseForPreset, overrideBase } from '../core/base.js';
+import { captureBase } from '../core/base.js';
 import { connectionHint } from '../core/capabilities.js';
 import { tapBpm, delayMs, normalizedForMs, SUBDIVISIONS } from '../core/tempo.js';
 import { buildParameterWrite } from '../core/parameterWrite.js';
+import { renderStart } from './start.js';
+import { renderSettings, openSettingsTab } from './settings.js';
 import { createWebMidiTransport } from '../transports/webmidi.js';
 import { createWebBluetoothTransport } from '../transports/webbluetooth.js';
 import { renderEditor } from './editor.js';
@@ -32,6 +34,8 @@ const capabilities = {
 };
 const escapeHtml = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 let state = loadState(window.localStorage);
+// Every page open begins with setup; Editor/Live are chosen after that.
+state.mode = 'start';
 let snapshot = null;
 let transport = null;
 let controllerTransport = null;
@@ -41,14 +45,14 @@ const pendingKey = (sequence, command) => `${sequence}:${command}`;
 const assembler = new ResponseAssembler();
 let lastReply = null;
 let lastSnapshotPreset = null;
-const baseByPreset = new Map();
 const localEnabled = new Map();
 const liveToggles = new Map();
-const MIDI_GAP_MS = 25;
-// The NANOCORE reorders long SysEx bursts; give each frame a longer settle window.
-const SYSEX_GAP_MS = 120;
+const MIDI_GAP_MS = 0; // CCs are sent immediately; the pedal handles them best that way.
+// SysEx frames are longer, so keep a short settle window rather than a long queue.
+const SYSEX_GAP_MS = 25;
 const names = { presets: new Map(), amp: null, ir: null };
 const logLines = [];
+const catalogState = { busy: false, message: '', presets: 0, amp: 0, ir: 0 };
 let tempoTaps = [];
 
 const currentAssignments = () => assignmentsFor(state, state.activePreset);
@@ -100,10 +104,13 @@ function syncDelays() {
 }
 
 function setStatus(text, online = false) {
-  const el = $('#status');
-  el.textContent = text;
-  el.classList.toggle('online', online);
-  el.classList.toggle('offline', !online);
+  document.body.classList.toggle('connected', online);
+  for (const el of [$('#status'), $('#top-status')]) {
+    if (!el) continue;
+    el.textContent = text;
+    el.classList.toggle('online', online);
+    el.classList.toggle('offline', !online);
+  }
 }
 
 // One scheduler for every write to the pedal: 25 ms spacing plus coalescing
@@ -119,8 +126,8 @@ const scheduler = createMidiScheduler({
   coalesceMs: MIDI_GAP_MS,
 });
 
-function send(bytes) {
-  return scheduler.send(bytes);
+function send(bytes, key) {
+  return scheduler.send(bytes, key);
 }
 
 function sendRequest(command, payload = [], timeout = 3000) {
@@ -162,10 +169,14 @@ function applySnapshot(parsed) {
   const presetChanged = lastSnapshotPreset !== null && lastSnapshotPreset !== parsed.activePreset;
   lastSnapshotPreset = parsed.activePreset;
   snapshot = parsed;
-  // Base is a stable in-memory copy of the pedal state, captured on the first
-  // sync or when the device reports a different preset. Local edits, scene
-  // recalls and chain reorder must not overwrite it.
-  baseForPreset(baseByPreset, parsed.activePreset + 1, parsed.blocks);
+  // Base is saved in browser storage like the other scenes. On the first sync
+  // of a preset, capture the pedal values as its initial Base.
+  const basePreset = parsed.activePreset + 1;
+  if (!Object.keys(assignmentsFor(state, basePreset).base?.values ?? {}).length) {
+    const captured = captureBase(parsed.blocks);
+    state = setBase(state, basePreset, captured.values, captured.enabled);
+    persist();
+  }
   // A snapshot read right after a stomp can still report the old on/off state.
   // Keep locally confirmed changes authoritative briefly so scenes store what
   // the user actually selected.
@@ -301,6 +312,7 @@ async function loadPresetNames() {
     }
   }
   names.presets = found;
+  catalogState.presets = found.size;
   render();
 }
 
@@ -360,6 +372,7 @@ async function loadAssetNames(kind) {
     }
     render();
   }
+  catalogState[kind] = list.filter(Boolean).length;
   render();
   return list;
 }
@@ -376,21 +389,116 @@ function applyPortSelection() {
   }
 }
 
+function finishSetup() {
+  if (state.mode !== 'start' || !transport) return;
+  update({ mode: 'editor' });
+  notify('Setup complete — Editor is ready');
+}
+
+function autoFetchCatalog() {
+  catalogState.busy = true;
+  catalogState.message = 'Fetching names from the pedal…';
+  render();
+  (async () => {
+    try {
+      const settings = parseGlobalSettings((await sendRequest(COMMAND.GET_GLOBALS, [])).payload);
+      if (state.globals.settingsLayout !== settings.layout) {
+        state = { ...state, globals: { ...state.globals, settingsLayout: settings.layout } };
+        persist();
+      }
+      log(`device settings layout ${settings.layout}`);
+    } catch (error) { log(`global settings: ${error.message}`); }
+    await loadPresetNames();
+    await loadAssetNames('amp');
+    await loadAssetNames('ir');
+    catalogState.message = `Fetched ${catalogState.presets} presets, ${catalogState.amp} amps, ${catalogState.ir} IRs`;
+    finishSetup();
+  })().catch((error) => {
+    catalogState.message = `Fetch failed: ${error.message}`;
+    log(`names: ${error.message}`);
+  }).finally(() => {
+    catalogState.busy = false;
+    render();
+  });
+}
+
+function setTransportKind(kind) {
+  if (!['webmidi', 'webbluetooth'].includes(kind)) return;
+  update({ globals: { ...state.globals, transportKind: kind } });
+  for (const id of ['#transport-kind', '#start-transport']) {
+    const select = $(id);
+    if (select) select.value = kind;
+  }
+  updateCapabilityHint();
+  notify(`Transport set to ${kind === 'webbluetooth' ? 'direct Bluetooth' : 'Web MIDI'}`);
+}
+
+function disconnect() {
+  transport?.disconnect();
+  controllerTransport?.disconnect();
+  transport = null;
+  controllerTransport = null;
+  setStatus('Disconnected', false);
+  names.presets = new Map();
+  names.amp = null;
+  names.ir = null;
+  catalogState.presets = 0;
+  catalogState.amp = 0;
+  catalogState.ir = 0;
+  catalogState.message = 'Disconnected — nothing fetched in this session.';
+  render();
+  notify('Disconnected from the NANOCORE');
+}
+
+async function refreshCatalog(which = 'all') {
+  if (catalogState.busy) return notify('A name fetch is already running');
+  if (!transport) throw new Error('Connect to the NANOCORE first');
+  catalogState.busy = true;
+  catalogState.message = `Fetching ${which === 'all' ? 'all names' : which}…`;
+  render();
+  try {
+    if (which === 'all' || which === 'presets') await loadPresetNames();
+    if (which === 'all' || which === 'amp') await refreshAssetNames('amp');
+    if (which === 'all' || which === 'ir') await refreshAssetNames('ir');
+    catalogState.message = `Fetched ${catalogState.presets} presets, ${catalogState.amp} amps, ${catalogState.ir} IRs`;
+    notify(catalogState.message);
+    finishSetup();
+  } catch (error) {
+    catalogState.message = `Fetch failed: ${error.message}`;
+    notify(catalogState.message);
+  } finally {
+    catalogState.busy = false;
+    render();
+  }
+}
+
+async function scanPorts() {
+  if ((state.globals.transportKind ?? 'webmidi') === 'webbluetooth') {
+    notify('Direct Bluetooth ports appear only after connecting');
+    return;
+  }
+  if (controllerTransport?.kind !== 'webmidi') controllerTransport = createWebMidiTransport();
+  await controllerTransport.scan();
+  applyPortSelection();
+  render();
+  notify('MIDI devices listed — choose ports, then Connect');
+}
+
 async function connect() {
-  const kind = $('#transport-kind').value;
+  const kind = state.globals.transportKind ?? $('#transport-kind')?.value ?? 'webmidi';
+  const reuseScannedWebMidi = kind === 'webmidi' && controllerTransport?.kind === 'webmidi' && !controllerTransport.connected;
   try {
     transport?.disconnect();
-    controllerTransport?.disconnect();
+    if (!reuseScannedWebMidi) controllerTransport?.disconnect();
     names.presets = new Map();
     names.amp = null;
     names.ir = null;
-    baseByPreset.clear();
     if (kind === 'webbluetooth') {
       transport = createWebBluetoothTransport();
       controllerTransport = createWebMidiTransport();
       try { await controllerTransport.connect(); } catch (error) { log(`controllers: ${error.message}`); }
     } else {
-      transport = createWebMidiTransport();
+      transport = controllerTransport?.kind === 'webmidi' ? controllerTransport : createWebMidiTransport();
       controllerTransport = transport;
     }
     await transport.connect();
@@ -400,22 +508,11 @@ async function connect() {
     if (controllerTransport !== transport) controllerTransport.onStateChange(() => render());
     applyPortSelection();
     setStatus(`Connected (${transport.kind})`, true);
+    setTransportKind(kind);
     log(`connected via ${transport.kind}`);
     render();
     await readSnapshot();
-    (async () => {
-      try {
-        const settings = parseGlobalSettings((await sendRequest(COMMAND.GET_GLOBALS, [])).payload);
-        if (state.globals.settingsLayout !== settings.layout) {
-          state = { ...state, globals: { ...state.globals, settingsLayout: settings.layout } };
-          persist();
-        }
-        log(`device settings layout ${settings.layout}`);
-      } catch (error) { log(`global settings: ${error.message}`); }
-      await loadPresetNames();
-      await loadAssetNames('amp');
-      await loadAssetNames('ir');
-    })().catch((error) => log(`names: ${error.message}`));
+    autoFetchCatalog();
   } catch (error) {
     setStatus('Connection failed', false);
     if (/Web MIDI is not available/.test(error.message)) {
@@ -453,6 +550,26 @@ const ctx = {
   },
   assetNames(kind) { return loadAssetNames(kind); },
   refreshAssetNames,
+  catalogStatus() {
+    return {
+      ...catalogState,
+      presets: catalogState.presets || names.presets?.size || 0,
+      amp: catalogState.amp || names.amp?.filter(Boolean).length || 0,
+      ir: catalogState.ir || names.ir?.filter(Boolean).length || 0,
+    };
+  },
+  connectionHint() { return connectionHint(capabilities); },
+  statusText() { return $('#status')?.textContent ?? ''; },
+  connect,
+  scanPorts,
+  setTransportKind,
+  disconnect,
+  refreshCatalog,
+  setGlobalSetting(key, value) {
+    const numeric = ['midiChannel'];
+    update({ globals: { ...state.globals, [key]: numeric.includes(key) ? Number(value) : value } });
+    notify(`${key} updated`);
+  },
   stompActive(fsId) {
     const key = `${state.activePreset}:${fsId}`;
     if (liveToggles.has(key)) return liveToggles.get(key);
@@ -513,15 +630,12 @@ const ctx = {
     notify(`${fsId} ${value === 127 ? 'on' : 'off'}${targets.length ? '' : ' — no FX assigned'}`);
   },
   baseOverridden() {
-    return Boolean(baseByPreset.get(state.activePreset)?.overridden);
+    return Boolean(Object.keys(currentAssignments().base?.values ?? {}).length);
   },
   storeScene(name) {
     if (!snapshot) return notify('Connect and read the preset first');
-    if (name === 'base' && !state.globals.baseOverride) {
-      return notify('Enable Base override in Globals to store Base values');
-    }
     const current = currentAssignments();
-    const stored = name === 'base' ? (baseByPreset.get(state.activePreset) ?? {}) : current;
+    const stored = name === 'base' ? (current.base ?? {}) : current;
     const values = { ...(stored.values ?? current.scenes?.[name] ?? {}) };
     const enabled = { ...(stored.enabled ?? current.sceneEnabled?.[name] ?? {}) };
     let skipped = 0;
@@ -531,9 +645,8 @@ const ctx = {
       enabled[block.id] = Boolean(block.enabled);
     }
     if (name === 'base') {
-      overrideBase(baseByPreset, state.activePreset, values, enabled);
-      update({ activeScene: 'base' });
-      return notify('Base stored in memory for this preset');
+      update({ ...setBase(state, state.activePreset, values, enabled), activeScene: 'base' });
+      return notify(`Base stored in this browser · ${Object.keys(enabled).length} fx states`);
     }
     let next = setScene(state, state.activePreset, name, values);
     next = setSceneEnabled(next, state.activePreset, name, enabled);
@@ -554,12 +667,12 @@ const ctx = {
       return;
     }
     update({ activeScene: name });
-    const base = baseByPreset.get(state.activePreset) ?? { values: {}, enabled: {} };
-    const values = name === 'base' ? base.values : currentAssignments().scenes?.[name];
+    const assignments = currentAssignments();
+    const base = assignments.base ?? { values: {}, enabled: {} };
+    const values = name === 'base' ? base.values : assignments.scenes?.[name];
     if (!values || !Object.keys(values).length) return notify('Nothing stored in that scene yet');
     let changes = 0;
-    const onOff = name === 'base' ? base.enabled : currentAssignments().sceneEnabled?.[name];
-    const assignments = currentAssignments();
+    const onOff = name === 'base' ? base.enabled : assignments.sceneEnabled?.[name];
     for (const [block, on] of Object.entries(onOff ?? {})) {
       if (!sceneBlockParticipates(assignments, block)) continue;
       const currentBlock = snapshot?.blocks.find((b) => b.id === block);
@@ -630,7 +743,8 @@ const ctx = {
       const view = new DataView(new ArrayBuffer(4));
       view.setFloat32(0, value, true);
       send(buildRequestSysEx(COMMAND.SET_FIELD,
-        [FIELD.PARAMETER, effectIndex, paramIndex, ...new Uint8Array(view.buffer)]));
+        [FIELD.PARAMETER, effectIndex, paramIndex, ...new Uint8Array(view.buffer)]),
+      `sysex-param:${blockId}:${paramIndex}`);
     }
     ctx.noteParameter(blockId, paramIndex, value);
   },
@@ -672,6 +786,24 @@ const ctx = {
     router.recallPreset(preset);
     setTimeout(readSnapshot, 260);
   },
+  async renamePresetOnDevice(name) {
+    if (!transport) return notify('Connect to the NANOCORE first');
+    const clean = cleanPresetName(name);
+    if (!clean) return notify('Enter a preset name using printable characters');
+    const ok = window.confirm(
+      `Rename NANOCORE preset ${state.activePreset} to "${clean}" and save it permanently?\n\n` +
+      'The name is limited to 8 printable ASCII characters by the pedal.',
+    );
+    if (!ok) return;
+    try {
+      await sendRequest(COMMAND.SET_FIELD, [FIELD.RENAME, clean.length, ...[...clean].map((c) => c.charCodeAt(0))]);
+      await sendRequest(COMMAND.SAVE_PRESET, [Math.max(0, state.activePreset - 1)]);
+      names.presets.set(state.activePreset - 1, clean);
+      ctx.updatePreset(state.activePreset, { name: clean });
+      render();
+      notify(`Preset ${state.activePreset} renamed to "${clean}" on the pedal`);
+    } catch (error) { notify(error.message); }
+  },
   async savePreset() {
     const preset = state.activePreset;
     const ok = window.confirm(
@@ -689,6 +821,7 @@ const ctx = {
 
 window.__nanocoreCtx = ctx;
 window.__nanocoreConnect = connect;
+window.__nanocoreSettingsTab = (tab) => openSettingsTab(ctx, tab);
 window.__nanocoreOpenDevices = () => openDevices(ctx);
 window.__nanocoreOpenGlobals = () => openGlobals(ctx, render);
 window.__nanocoreClearLog = () => { logLines.length = 0; $('#log').textContent = ''; };
@@ -701,9 +834,14 @@ updateCapabilityHint();
 updateTempoUI();
 
 function render() {
+  document.body.classList.toggle('start-mode', state.mode === 'start');
   updateTempoUI();
   for (const button of document.querySelectorAll('#mode-switch button')) {
     button.classList.toggle('active', button.dataset.mode === state.mode);
+  }
+  if (state.mode === 'start') {
+    $('#content').innerHTML = renderStart(ctx);
+    return;
   }
   if (state.mode === 'live') {
     $('#sidebar').innerHTML = renderLiveSidebar(ctx);

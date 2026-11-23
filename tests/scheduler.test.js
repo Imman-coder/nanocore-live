@@ -131,6 +131,16 @@ test('a long mixed burst keeps strict FIFO order', () => {
   assert.deepEqual(writes, expected);
 });
 
+test('a custom key coalesces SyEx frames that differ only by sequence', () => {
+  const { scheduler, writes, clock } = setup({ sysexGapMs: 25 });
+  const a = [0xf0, 0x01, 0x00];
+  const b = [0xf0, 0x02, 0x7f];
+  scheduler.send(a, 'sysex-param:mod:0');
+  scheduler.send(b, 'sysex-param:mod:0');
+  clock.advance(25);
+  assert.deepEqual(writes, [b]);
+});
+
 test('every queued caller resolves when its message is written', async () => {
   const { scheduler, clock } = setup();
   let resolved = 0;

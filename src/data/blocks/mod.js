@@ -1,5 +1,8 @@
 import { enumP, range } from '../paramHelpers.js';
 
+// The official MIDI guide lists Level at CC70-73 for Chorus/Phaser/Flanger/
+// Tremolo/Vibrato, but hardware verification showed those slots are absent on
+// the device. They are deliberately not defined here so writes stay in range.
 const WAVE_OPTIONS = ['Sine', 'Triangle', 'Square', 'Saw'];
 
 export const mod = {

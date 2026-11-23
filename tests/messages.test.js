@@ -6,6 +6,7 @@ import {
   pack7bit,
   unpack7bit,
   buildRequestSysEx,
+  buildRenameSysEx,
   parseSysEx,
   splitBleMidi,
   reassembleBleMidi,
@@ -65,6 +66,18 @@ test('preset volume is a raw 0-100 value in set-field 0x04', () => {
   const frame = buildRequestSysEx(COMMAND.SET_FIELD, [FIELD.VOLUME, 60], 7);
   assert.deepEqual(parseSysEx(frame).payload, [FIELD.VOLUME, 60]);
 });
+test('preset rename writes field 08 with a length-prefixed ASCII name', () => {
+  const frame = buildRenameSysEx('BassSong', 0x21);
+  assert.deepEqual(frame.slice(0, 9), [0xf0, 0x7d, 0x4e, 0x43, 0x70, 0x00, 0x02, 0x21, 0x00]);
+  assert.deepEqual(parseSysEx(frame).payload, [8, 8, ...[...'BassSong'].map((c) => c.charCodeAt(0))]);
+  assert.throws(() => buildRenameSysEx(''), /printable/);
+});
+
+test('preset rename clamps over-long names to eight characters', () => {
+  const frame = buildRenameSysEx('abcdefghijk', 1);
+  assert.equal(parseSysEx(frame).payload[1], 8);
+});
+
 test('device replies carry status and echo sequence and command', () => {
   const reply = [
     0xf0, 0x7d, 0x4e, 0x43, 0x71,

@@ -33,6 +33,20 @@ test('Web MIDI asks for SysEx permission and selects the NANOCORE output', async
   assert.deepEqual(sent, [[0xb0, 20, 127]]);
 });
 
+test('scan lists ports before connecting and connect reuses that access', async () => {
+  const { nav } = fakeNavigator();
+  const transport = createWebMidiTransport({ navigator: nav });
+  let calls = 0;
+  const original = nav.requestMIDIAccess;
+  nav.requestMIDIAccess = async (opts) => { calls++; return original(opts); };
+  const ports = await transport.scan();
+  assert.equal(ports.inputs.length, 2);
+  assert.equal(calls, 1);
+  assert.equal(transport.connected, false);
+  await transport.connect();
+  assert.equal(calls, 1, 'connect must not ask for MIDI access a second time');
+});
+
 test('controller messages and device replies are separated', async () => {
   const { nav, access } = fakeNavigator();
   const transport = createWebMidiTransport({ navigator: nav });

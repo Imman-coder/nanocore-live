@@ -123,6 +123,19 @@ export function unpack7bit(packed) {
   return out;
 }
 
+// Rename the active preset in live RAM (field 0x08). At most 8 printable ASCII
+// characters; the pedal pads with spaces and echoes the bytes back.
+export function cleanPresetName(name) {
+  return String(name ?? '').replace(/[^\x20-\x7e]/g, '').slice(0, 8);
+}
+
+export function buildRenameSysEx(name, sequence = 1) {
+  const clean = cleanPresetName(name);
+  if (!clean) throw new RangeError('Preset name needs at least one printable ASCII character');
+  return buildRequestSysEx(COMMAND.SET_FIELD,
+    [FIELD.RENAME, clean.length, ...[...clean].map((c) => c.charCodeAt(0))], sequence);
+}
+
 export function buildRequestSysEx(command, payload, sequence = 1, direction = DIR_HOST_TO_DEVICE) {
   const p = payload ?? [];
   const body = [0x02, ...u16(sequence), ...u16(command), ...u16(p.length), ...p];
