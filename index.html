@@ -4,6 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>NANOCORE Live + Editor</title>
+  <meta name="theme-color" content="#0d0f13">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" type="image/png" href="/icons/icon-192.png">
+  <link rel="apple-touch-icon" href="/icons/icon-192.png">
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
@@ -13,16 +18,31 @@
       <button data-mode="editor" class="active">Editor</button>
       <button data-mode="live">Live</button>
     </nav>
+    <div class="tempo">
+      <button id="tap-tempo" title="Tap to set BPM and sync delays">TAP</button>
+      <span id="bpm-count" class="bpm-count">—</span>
+      <select id="time-signature" aria-label="Time signature">
+        <option value="4/4">4/4</option><option value="3/4">3/4</option><option value="2/4">2/4</option>
+        <option value="6/8">6/8</option><option value="9/8">9/8</option><option value="12/8">12/8</option>
+        <option value="3/8">3/8</option>
+      </select>
+    </div>
     <div class="transport">
+      <button id="connect">Connect</button>
+      <span id="status" class="status offline">Disconnected</span>
+    </div>
+    <button id="fullscreen-toggle" aria-label="Enter fullscreen" title="Fullscreen">⛶</button>
+    <button id="menu-toggle" class="menu-toggle" aria-label="Open menu" aria-controls="topbar-menu" aria-expanded="false">☰</button>
+    <div id="topbar-menu" class="topbar-menu">
+      <label class="small" for="transport-kind">Transport</label>
       <select id="transport-kind" aria-label="Transport">
         <option value="webmidi">USB MIDI / paired Bluetooth MIDI</option>
         <option value="webbluetooth">Direct Bluetooth (Web Bluetooth)</option>
       </select>
-      <button id="connect">Connect</button>
-      <span id="status" class="status offline">Disconnected</span>
+      <button id="open-devices" class="ghost">MIDI devices</button>
+      <button id="open-globals" class="ghost">Globals</button>
+      <p class="muted small" id="capability-hint"></p>
     </div>
-    <button id="open-devices" class="ghost">MIDI devices</button>
-    <button id="open-globals" class="ghost">Globals</button>
   </header>
 
   <main>
@@ -39,5 +59,12 @@
   <div id="modal" hidden></div>
 
   <script type="module" src="/src/ui/app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch(() => {});
+      });
+    }
+  </script>
 </body>
 </html>

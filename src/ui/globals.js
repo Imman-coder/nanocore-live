@@ -1,5 +1,5 @@
 // Globals modal: controller triggers, MIDI channel, persistence import/export.
-import { createDefaultState, exportState, importState } from '../core/store.js';
+import { createDefaultState, exportState, importState, normalizeState, USER_SCENE_KEYS } from '../core/store.js';
 import { describeTrigger } from '../core/router.js';
 import { FIRMWARE_OPTIONS } from '../core/versions.js';
 
@@ -20,6 +20,7 @@ export function openGlobals(ctx, rerender) {
 
 function body(ctx) {
   const g = ctx.state.globals;
+  const tap = g.tapTempoSwitch ?? createDefaultState().globals.tapTempoSwitch;
   const rows = g.footswitches.map((fs) => `
     <div class="binding">
       <div class="field">
@@ -52,13 +53,41 @@ function body(ctx) {
           <button class="small" data-global="learn" data-fs="${pedal.id}">Learn</button>
         </div>
       </div>`).join('')}
+    <div class="field"><label><input type="checkbox" data-global="interactive-live" ${g.interactiveLive ? 'checked' : ''}> Interactive Live mode</label>
+      <span class="muted small">Let the Live expression meters be dragged or arrow-keyed to control assigned parameters.</span></div>
+    <h3>Tempo</h3>
+    <div class="field"><label><input type="checkbox" data-global="tempo-sync" ${g.tempoSync !== false ? 'checked' : ''}> Sync delay time to tap tempo</label></div>
+    <div class="field"><label>Delay subdivision</label><select data-global="tempo-subdivision">
+      ${['1/4','1/8','1/8d','1/16'].map((id) => `<option value="${id}" ${(g.tempo?.subdivision ?? '1/8') === id ? 'selected' : ''}>${({ '1/4': 'Quarter', '1/8': 'Eighth', '1/8d': 'Dotted eighth', '1/16': 'Sixteenth' })[id]}</option>`).join('')}
+    </select></div>
+    <div class="field">
+      <label>Tap tempo trigger</label>
+      <select data-tap="type">
+        ${['cc', 'pc', 'note'].map((t) => `<option value="${t}" ${tap.trigger?.type === t ? 'selected' : ''}>${t.toUpperCase()}</option>`).join('')}
+      </select>
+      <label>Channel</label><input data-tap="channel" type="number" min="1" max="16" value="${tap.trigger?.channel ?? 1}">
+      <label>Number</label><input data-tap="number" type="number" min="0" max="127" value="${tap.trigger?.number ?? 87}">
+      <button class="small" data-global="learn" data-fs="${tap.id}">Learn</button>
+      <span class="muted small">${escapeHtml(describeTrigger(tap.trigger))}</span>
+    </div>
+    <h3>Scenes</h3>
+    <div class="field"><label><input type="checkbox" data-global="base-override" ${g.baseOverride ? 'checked' : ''}> Base scene override</label>
+      <span class="muted small">Let Base store the current values like the other scenes. Stored in memory only.</span></div>
+    <p class="muted small">Base is always available. Choose up to six total scenes and name each one.</p>
+    <div class="field">
+      <label>Number of scenes</label>
+      <select data-global="scene-count">
+        ${[3, 4, 5, 6].map((n) => `<option value="${n}" ${(g.sceneCount ?? 3) === n ? 'selected' : ''}>${n}</option>`).join('')}
+      </select>
+    </div>
     <h3>Scene switches</h3>
     <p class="muted small">Each switch recalls the scene you assign it to. Use Learn to capture a MIDI message from your controller.</p>
     ${(g.sceneSwitches ?? []).map((sw) => `
       <div class="binding"><div class="field">
         <label>Name</label><input data-global="scene-name" data-scene-id="${sw.id}" value="${escapeHtml(sw.name)}">
         <label>Recalls</label><select data-global="scene-target" data-scene-id="${sw.id}">
-          ${['base', 'scene1', 'scene2'].map((v) => `<option value="${v}" ${sw.scene === v ? 'selected' : ''}>${v === 'base' ? 'Base' : `Scene ${v.slice(-1)}`}</option>`).join('')}
+          ${['base', ...USER_SCENE_KEYS.slice(0, Math.max(0, (g.sceneCount ?? 3) - 1))]
+            .map((v) => `<option value="${v}" ${sw.scene === v ? 'selected' : ''}>${escapeHtml(ctx.sceneName(v))}</option>`).join('')}
         </select>
         <label>Trigger</label><select data-global="scene-type" data-scene-id="${sw.id}">
           ${['cc', 'pc', 'note'].map((t) => `<option value="${t}" ${sw.trigger?.type === t ? 'selected' : ''}>${t.toUpperCase()}</option>`).join('')}
@@ -117,6 +146,19 @@ function collect() {
     if (input.dataset.global === 'scene-channel') sw.trigger = { ...sw.trigger, channel: Number(input.value) };
     if (input.dataset.global === 'scene-number') sw.trigger = { ...sw.trigger, number: Number(input.value) };
   }
+  const tapInputs = [...document.querySelectorAll('[data-tap]')];
+  if (tapInputs.length && globals.tapTempoSwitch) {
+    for (const input of tapInputs) {
+      if (input.dataset.tap === 'type') globals.tapTempoSwitch.trigger = { ...globals.tapTempoSwitch.trigger, type: input.value };
+      if (input.dataset.tap === 'channel') globals.tapTempoSwitch.trigger = { ...globals.tapTempoSwitch.trigger, channel: Number(input.value) };
+      if (input.dataset.tap === 'number') globals.tapTempoSwitch.trigger = { ...globals.tapTempoSwitch.trigger, number: Number(input.value) };
+    }
+  }
+  globals.baseOverride = document.querySelector('[data-global="base-override"]').checked;
+  globals.interactiveLive = document.querySelector('[data-global="interactive-live"]').checked;
+  globals.tempoSync = document.querySelector('[data-global="tempo-sync"]').checked;
+  globals.tempo = { ...(globals.tempo ?? {}), subdivision: document.querySelector('[data-global="tempo-subdivision"]').value };
+  globals.sceneCount = Number(document.querySelector('[data-global="scene-count"]').value);
   globals.firmware = document.querySelector('[data-global="firmware"]').value;
   globals.midiChannel = Number(document.querySelector('[data-global="midi-channel"]').value);
   globals.recallMethod = document.querySelector('[data-global="recall-method"]').value;
@@ -131,7 +173,7 @@ document.addEventListener('click', (event) => {
       document.querySelector('#modal').hidden = true;
       break;
     case 'save':
-      modalCtx.update({ globals: collect() });
+      modalCtx.update({ globals: normalizeState({ ...modalCtx.state, globals: collect() }).globals });
       document.querySelector('#modal').hidden = true;
       modalRender?.();
       break;
@@ -147,9 +189,10 @@ document.addEventListener('click', (event) => {
         const globals = collect();
         const target = globals.footswitches.find((f) => f.id === id)
           ?? globals.expressionPedals?.find((p) => p.id === id)
-          ?? globals.sceneSwitches?.find((s) => s.id === id);
+          ?? globals.sceneSwitches?.find((s) => s.id === id)
+          ?? (globals.tapTempoSwitch?.id === id ? globals.tapTempoSwitch : null);
         if (target) target.trigger = learned;
-        modalCtx.update({ globals });
+        modalCtx.update({ globals: normalizeState({ ...modalCtx.state, globals }).globals });
         openGlobals(modalCtx, modalRender);
         modalCtx.notify(`Learned ${describeTrigger(learned)} for ${id}`);
       }, 120);

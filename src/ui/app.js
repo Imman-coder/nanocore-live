@@ -1,16 +1,21 @@
 // App shell: state, transports, routing glue and view switching.
-import { BLOCK_BY_ID, SNAPSHOT_BLOCKS } from '../core/spec.js';
+import { BLOCK_BY_ID, BLOCKS, FX2_SPECIAL_TYPES, SNAPSHOT_BLOCKS } from '../core/spec.js';
 import {
   loadState, saveState, createDefaultState, setActivePreset, updatePreset,
   upsertStomp, assignmentsFor, effectiveStompLabel, setScene, setSceneEnabled,
-  setBlockStomp, setParamPedal, pedalOwner, setExpressionTrigger,
+  setBlockStomp, setParamPedal, pedalOwner, setExpressionTrigger, USER_SCENE_KEYS, renameScene, setSceneBlock,
 } from '../core/store.js';
 import { createRouter, describeTrigger } from '../core/router.js';
 import { createMidiScheduler } from '../core/scheduler.js';
 import { buildCc, buildRequestSysEx, parseSysEx, ResponseAssembler, COMMAND, FIELD } from '../core/messages.js';
 import { parseSnapshot } from '../core/snapshot.js';
 import { COMMAND as CAT, parsePresetCatalog, parseStorageInfo, parseSlotInfo, parseGlobalSettings, activeSlotFor } from '../core/catalog.js';
-import { resolveFirmware } from '../core/versions.js';
+import { resolveFirmware, typesFor } from '../core/versions.js';
+import { stompActive, toggleCc, sceneStored, sceneBlockParticipates, expressionBytes } from '../core/live.js';
+import { captureBase, baseForPreset, overrideBase } from '../core/base.js';
+import { connectionHint } from '../core/capabilities.js';
+import { tapBpm, delayMs, normalizedForMs, SUBDIVISIONS } from '../core/tempo.js';
+import { buildParameterWrite } from '../core/parameterWrite.js';
 import { createWebMidiTransport } from '../transports/webmidi.js';
 import { createWebBluetoothTransport } from '../transports/webbluetooth.js';
 import { renderEditor } from './editor.js';
@@ -20,6 +25,12 @@ import { openDevices } from './devices.js';
 import './ui-events.js';
 
 const $ = (sel) => document.querySelector(sel);
+const capabilities = {
+  secure: Boolean(window.isSecureContext),
+  midi: typeof navigator.requestMIDIAccess === 'function',
+  bluetooth: typeof navigator.bluetooth?.requestDevice === 'function',
+};
+const escapeHtml = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 let state = loadState(window.localStorage);
 let snapshot = null;
 let transport = null;
@@ -30,12 +41,15 @@ const pendingKey = (sequence, command) => `${sequence}:${command}`;
 const assembler = new ResponseAssembler();
 let lastReply = null;
 let lastSnapshotPreset = null;
-let deviceBaseline = null;
-let deviceBaselineEnabled = null;
+const baseByPreset = new Map();
 const localEnabled = new Map();
+const liveToggles = new Map();
 const MIDI_GAP_MS = 25;
+// The NANOCORE reorders long SysEx bursts; give each frame a longer settle window.
+const SYSEX_GAP_MS = 120;
 const names = { presets: new Map(), amp: null, ir: null };
 const logLines = [];
+let tempoTaps = [];
 
 const currentAssignments = () => assignmentsFor(state, state.activePreset);
 
@@ -56,6 +70,35 @@ function notify(message) {
   setTimeout(() => el.remove(), 2600);
 }
 
+function updateTempoUI() {
+  const tempo = state.globals.tempo ?? { bpm: null, signature: '4/4', subdivision: '1/8' };
+  const button = $('#tap-tempo');
+  const count = $('#bpm-count');
+  const signature = $('#time-signature');
+  if (button) button.classList.toggle('active', Boolean(tempo.bpm));
+  if (count) count.textContent = tempo.bpm ? `${tempo.bpm}` : '—';
+  if (signature && signature.value !== tempo.signature) signature.value = tempo.signature;
+  const liveTap = document.querySelector('[data-action="tap-tempo"] .stomp-cc');
+  if (liveTap) liveTap.textContent = tempo.bpm ? `${tempo.bpm} BPM · tap to retap` : 'tap to set BPM';
+}
+
+function syncDelays() {
+  const tempo = state.globals.tempo;
+  if (!snapshot || !state.globals.tempoSync || !tempo?.bpm) return;
+  const ms = delayMs(tempo.bpm, tempo.signature, tempo.subdivision);
+  const block = snapshot.blocks.find((b) => b.id === 'del');
+  if (!block) return;
+  const type = typesFor('del', resolveFirmware(state)).find((t) => t.id === block.variant);
+  const offset = BLOCK_BY_ID.del.commonParams?.length ?? 0;
+  let changes = 0;
+  for (const [index, param] of (type?.params ?? []).entries()) {
+    if (param.label !== 'Time' && param.label !== 'Delay') continue;
+    ctx.setParameter('del', offset + index, normalizedForMs(ms, param.min, param.max));
+    changes++;
+  }
+  notify(changes ? `Delay synced to ${ms} ms · ${tempo.bpm} BPM` : 'No writable delay time on this effect');
+}
+
 function setStatus(text, online = false) {
   const el = $('#status');
   el.textContent = text;
@@ -72,6 +115,7 @@ const scheduler = createMidiScheduler({
     log('→ ' + [...bytes].map((b) => b.toString(16).padStart(2, '0')).join(' '));
   },
   gapMs: MIDI_GAP_MS,
+  sysexGapMs: SYSEX_GAP_MS,
   coalesceMs: MIDI_GAP_MS,
 });
 
@@ -117,10 +161,11 @@ function syncPresetFromDevice() {
 function applySnapshot(parsed) {
   const presetChanged = lastSnapshotPreset !== null && lastSnapshotPreset !== parsed.activePreset;
   lastSnapshotPreset = parsed.activePreset;
-  deviceBaseline = Object.fromEntries(parsed.blocks.flatMap((block) =>
-    block.params.map((value, index) => [`${block.id}:${index}`, value])));
-  deviceBaselineEnabled = Object.fromEntries(parsed.blocks.map((block) => [block.id, block.enabled]));
   snapshot = parsed;
+  // Base is a stable in-memory copy of the pedal state, captured on the first
+  // sync or when the device reports a different preset. Local edits, scene
+  // recalls and chain reorder must not overwrite it.
+  baseForPreset(baseByPreset, parsed.activePreset + 1, parsed.blocks);
   // A snapshot read right after a stomp can still report the old on/off state.
   // Keep locally confirmed changes authoritative briefly so scenes store what
   // the user actually selected.
@@ -190,13 +235,15 @@ const router = createRouter({
   send,
   isDevicePort: (port) => /nanocore/i.test(port),
   onScene: (scene) => ctx.recallScene(scene),
+  onTapTempo: () => ctx.tapTempo(),
   getVariant: (blockId) => snapshot?.blocks.find((b) => b.id === blockId)?.variant ?? 0,
   onEvent: (event) => {
     log(`${event.type}: ${JSON.stringify(event).slice(0, 140)}`);
     if (event.type === 'expression') {
-      const index = currentAssignments().expressions.findIndex((e) => e.id === event.expression);
-      const meter = document.getElementById(`expr-meter-${index}`);
+      const meter = document.getElementById(`expr-meter-${event.expression}`);
       if (meter) meter.style.width = `${Math.round((event.value / 127) * 100)}%`;
+      const value = document.getElementById(`expr-value-${event.expression}`);
+      if (value) value.textContent = `${Math.round((event.value / 127) * 100)}%`;
     }
     if (event.type === 'stomp') {
       ctx.noteEnabled(event.block, event.value === 127);
@@ -337,6 +384,7 @@ async function connect() {
     names.presets = new Map();
     names.amp = null;
     names.ir = null;
+    baseByPreset.clear();
     if (kind === 'webbluetooth') {
       transport = createWebBluetoothTransport();
       controllerTransport = createWebMidiTransport();
@@ -370,7 +418,15 @@ async function connect() {
     })().catch((error) => log(`names: ${error.message}`));
   } catch (error) {
     setStatus('Connection failed', false);
-    notify(error.message);
+    if (/Web MIDI is not available/.test(error.message)) {
+      if (!capabilities.midi && capabilities.bluetooth && $('#transport-kind')) {
+        $('#transport-kind').value = 'webbluetooth';
+      }
+      notify(connectionHint(capabilities));
+    } else {
+      notify(error.message);
+    }
+    updateCapabilityHint();
     log(`connect: ${error.message}`);
   }
 }
@@ -383,30 +439,129 @@ const ctx = {
   get devicePorts() { return transport?.listPorts() ?? { inputs: [], outputs: [] }; },
   get lastReply() { return lastReply; },
   get names() { return names; },
+  get capabilities() { return { ...capabilities }; },
   get firmware() { return resolveFirmware(state); },
   presetLabel,
+  sceneKeys() {
+    return ['base', ...USER_SCENE_KEYS.slice(0, Math.max(0, (state.globals.sceneCount ?? 3) - 1))];
+  },
+  sceneName(key) {
+    return key === 'base' ? 'Base' : (currentAssignments().sceneNames?.[key] ?? `Scene ${key.slice(-1)}`);
+  },
+  renameScene(key, label) {
+    update(renameScene(state, state.activePreset, key, label));
+  },
   assetNames(kind) { return loadAssetNames(kind); },
   refreshAssetNames,
+  stompActive(fsId) {
+    const key = `${state.activePreset}:${fsId}`;
+    if (liveToggles.has(key)) return liveToggles.get(key);
+    const binding = currentAssignments().stomps.find((s) => s.fsId === fsId);
+    const blocks = Object.fromEntries((snapshot?.blocks ?? []).map((b) => [b.id, b]));
+    return stompActive(binding?.targets, blocks);
+  },
+  tapTempo() {
+    const now = Date.now();
+    tempoTaps = [...tempoTaps.filter((t) => now - t <= 4000), now].slice(-5);
+    const bpm = tapBpm(tempoTaps, now);
+    if (!bpm) {
+      notify('Keep tapping to set a tempo');
+      updateTempoUI();
+      return;
+    }
+    state = { ...state, globals: { ...state.globals, tempo: { ...state.globals.tempo, bpm } } };
+    persist();
+    updateTempoUI();
+    syncDelays();
+  },
+  setTempo(patch) {
+    state = { ...state, globals: { ...state.globals, tempo: { ...(state.globals.tempo ?? {}), ...patch } } };
+    persist();
+    updateTempoUI();
+    syncDelays();
+  },
+  syncDelays,
+  sendExpression(pedalId, value) {
+    if (!state.globals.interactiveLive) return;
+    const mapping = currentAssignments().expressions.find((e) => e.id === pedalId);
+    if (!mapping) return notify(`${pedalId} has no parameter assigned in this preset`);
+    const variant = snapshot?.blocks.find((b) => b.id === mapping.target)?.variant ?? 0;
+    const bytes = expressionBytes(mapping, state.globals.midiChannel ?? 1, variant, value);
+    send(bytes);
+    const meter = document.getElementById(`expr-meter-${pedalId}`);
+    const label = document.getElementById(`expr-value-${pedalId}`);
+    const percent = Math.round((value / 127) * 100);
+    if (meter) meter.style.width = `${percent}%`;
+    if (label) label.textContent = `${percent}%`;
+  },
+  toggleStomp(fsId) {
+    if (!snapshot) return notify('Connect and read the preset first');
+    const active = ctx.stompActive(fsId);
+    const value = toggleCc(active);
+    const key = `${state.activePreset}:${fsId}`;
+    liveToggles.set(key, value === 127);
+    const binding = currentAssignments().stomps.find((s) => s.fsId === fsId);
+    const targets = binding?.targets ?? [];
+    for (const target of targets) {
+      const block = typeof target === 'string' ? target : target.block;
+      const cc = BLOCK_BY_ID[block]?.onOffCc;
+      if (!cc) continue;
+      send(buildCc(state.globals.midiChannel ?? 1, cc, value));
+      ctx.noteEnabled(block, value === 127);
+    }
+    render();
+    notify(`${fsId} ${value === 127 ? 'on' : 'off'}${targets.length ? '' : ' — no FX assigned'}`);
+  },
+  baseOverridden() {
+    return Boolean(baseByPreset.get(state.activePreset)?.overridden);
+  },
   storeScene(name) {
     if (!snapshot) return notify('Connect and read the preset first');
-    const values = {};
-    const enabled = {};
+    if (name === 'base' && !state.globals.baseOverride) {
+      return notify('Enable Base override in Globals to store Base values');
+    }
+    const current = currentAssignments();
+    const stored = name === 'base' ? (baseByPreset.get(state.activePreset) ?? {}) : current;
+    const values = { ...(stored.values ?? current.scenes?.[name] ?? {}) };
+    const enabled = { ...(stored.enabled ?? current.sceneEnabled?.[name] ?? {}) };
+    let skipped = 0;
     for (const block of snapshot.blocks) {
+      if (!sceneBlockParticipates(current, block.id)) { skipped++; continue; }
       block.params.forEach((value, index) => { values[`${block.id}:${index}`] = value; });
       enabled[block.id] = Boolean(block.enabled);
+    }
+    if (name === 'base') {
+      overrideBase(baseByPreset, state.activePreset, values, enabled);
+      update({ activeScene: 'base' });
+      return notify('Base stored in memory for this preset');
     }
     let next = setScene(state, state.activePreset, name, values);
     next = setSceneEnabled(next, state.activePreset, name, enabled);
     update(next);
-    notify(`${name === 'base' ? 'Base' : `Scene ${name.slice(-1)}`} stored with ${Object.keys(enabled).length} fx states`);
+    notify(`${name === 'base' ? 'Base' : `Scene ${name.slice(-1)}`} stored · ${Object.keys(enabled).length} fx states${skipped ? ` · ${skipped} block(s) skipped` : ''}`);
+  },
+  selectScene(name) {
+    if (!sceneStored(currentAssignments(), name)) {
+      update({ activeScene: name });
+      notify(`${ctx.sceneName(name)} is empty — press Store to save it here`);
+      return;
+    }
+    ctx.recallScene(name);
   },
   recallScene(name) {
+    if (!sceneStored(currentAssignments(), name)) {
+      notify(`${ctx.sceneName(name)} is empty — store something there first`);
+      return;
+    }
     update({ activeScene: name });
-    const values = name === 'base' ? deviceBaseline : currentAssignments().scenes?.[name];
+    const base = baseByPreset.get(state.activePreset) ?? { values: {}, enabled: {} };
+    const values = name === 'base' ? base.values : currentAssignments().scenes?.[name];
     if (!values || !Object.keys(values).length) return notify('Nothing stored in that scene yet');
     let changes = 0;
-    const onOff = name === 'base' ? deviceBaselineEnabled : currentAssignments().sceneEnabled?.[name];
+    const onOff = name === 'base' ? base.enabled : currentAssignments().sceneEnabled?.[name];
+    const assignments = currentAssignments();
     for (const [block, on] of Object.entries(onOff ?? {})) {
+      if (!sceneBlockParticipates(assignments, block)) continue;
       const currentBlock = snapshot?.blocks.find((b) => b.id === block);
       if (!currentBlock || !BLOCK_BY_ID[block]?.onOffCc || currentBlock.enabled === Boolean(on)) continue;
       send(buildCc(state.globals.midiChannel ?? 1, BLOCK_BY_ID[block].onOffCc, on ? 127 : 0));
@@ -415,6 +570,7 @@ const ctx = {
     }
     for (const [key, value] of Object.entries(values)) {
       const [block, index] = key.split(':');
+      if (!sceneBlockParticipates(assignments, block)) continue;
       const current = snapshot?.blocks.find((b) => b.id === block)?.params[Number(index)];
       if (current === undefined || Math.abs(current - value) < 0.005) continue;
       ctx.setParameter(block, Number(index), value);
@@ -422,6 +578,19 @@ const ctx = {
     }
     render();
     notify(`${name === 'base' ? 'Base' : `Scene ${name.slice(-1)}`} recalled · ${changes} parameters changed`);
+  },
+  sceneBlockEnabled(blockId) { return sceneBlockParticipates(currentAssignments(), blockId); },
+  setSceneBlock(blockId, participates) {
+    update(setSceneBlock(state, state.activePreset, blockId, participates));
+    notify(`${BLOCK_BY_ID[blockId]?.name ?? blockId} ${participates ? 'now participates in scenes' : 'excluded from scenes — saved values kept'}`);
+  },
+  setVolume(value) {
+    if (!snapshot) return;
+    const volume = Math.max(0, Math.min(100, Math.round(Number(value) || 0)));
+    send(buildRequestSysEx(COMMAND.SET_FIELD, [FIELD.VOLUME, volume]));
+    snapshot.volume = volume;
+    render();
+    setTimeout(readSnapshot, 250);
   },
   setChainOrder(order) {
     const indices = order.map((id) => SNAPSHOT_BLOCKS.indexOf(id));
@@ -444,10 +613,25 @@ const ctx = {
     const effectIndex = SNAPSHOT_BLOCKS.indexOf(blockId);
     if (effectIndex === -1) return;
     const value = Math.max(0, Math.min(1, normalized));
-    const view = new DataView(new ArrayBuffer(4));
-    view.setFloat32(0, value, true);
-    send(buildRequestSysEx(COMMAND.SET_FIELD,
-      [FIELD.PARAMETER, effectIndex, paramIndex, ...new Uint8Array(view.buffer)]));
+    const current = snapshot?.blocks.find((b) => b.id === blockId);
+    const types = typesFor(blockId, resolveFirmware(state));
+    const type = types.find((t) => (t.variant ?? t.id) === current?.variant);
+    const offset = BLOCK_BY_ID[blockId].commonParams?.length ?? 0;
+    const param = type?.params[paramIndex - offset];
+    const fx2 = snapshot?.blocks.find((b) => b.id === 'fx2');
+    const sharedCcConflict = blockId === 'mod' && fx2 && (
+      resolveFirmware(state) === '1.3.5' || FX2_SPECIAL_TYPES.includes(fx2.variant)
+    );
+    const ccBytes = sharedCcConflict ? null
+      : buildParameterWrite({ param, normalized: value, channel: Number(state.globals.midiChannel) || 1 });
+    if (ccBytes) {
+      send(ccBytes);
+    } else {
+      const view = new DataView(new ArrayBuffer(4));
+      view.setFloat32(0, value, true);
+      send(buildRequestSysEx(COMMAND.SET_FIELD,
+        [FIELD.PARAMETER, effectIndex, paramIndex, ...new Uint8Array(view.buffer)]));
+    }
     ctx.noteParameter(blockId, paramIndex, value);
   },
   setAssetName(kind, slot, name) {
@@ -509,7 +693,15 @@ window.__nanocoreOpenDevices = () => openDevices(ctx);
 window.__nanocoreOpenGlobals = () => openGlobals(ctx, render);
 window.__nanocoreClearLog = () => { logLines.length = 0; $('#log').textContent = ''; };
 
+function updateCapabilityHint() {
+  const el = $('#capability-hint');
+  if (el) el.textContent = connectionHint(capabilities);
+}
+updateCapabilityHint();
+updateTempoUI();
+
 function render() {
+  updateTempoUI();
   for (const button of document.querySelectorAll('#mode-switch button')) {
     button.classList.toggle('active', button.dataset.mode === state.mode);
   }
@@ -518,16 +710,27 @@ function render() {
     $('#content').innerHTML = renderLive(ctx);
     return;
   }
-  $('#sidebar').innerHTML = `<h2>Editor</h2>
-    <p class="muted small">Live RAM edits are immediate. <b>Save to pedal</b> makes them permanent.</p>
-    <div class="card"><h3>Chain order</h3>
-      <div class="chain">${(snapshot?.chainOrder ?? [0, 1, 2, 3, 4, 5, 6, 7])
-        .map((index, position) => `<span class="chip">${position + 1}. ${BLOCK_BY_ID[['fx1', 'fx2', 'amp', 'cab', 'del', 'mod', 'rev', 'eq'][index]]?.name ?? index}</span>`).join('')}</div>
-      <p class="muted small">Chain order is read here; reorder on the device or in the upstream editor.</p>
+  const presets = Object.keys(state.presets).map(Number).sort((a, b) => a - b)
+    .map((number) => `<div class="row-card ${number === state.activePreset ? 'selected' : ''}"
+        data-action="recall-preset" data-preset="${number}">
+        <div class="row-title"><b>${escapeHtml(ctx.presetLabel(number))}</b><span class="pill">${number}</span></div>
+      </div>`).join('');
+  $('#sidebar').innerHTML = `<h2>NANOCORE</h2>
+    <div class="card preset-volume">
+      <div class="muted small">Preset volume</div>
+      <input id="preset-volume" type="range" min="0" max="100" value="${snapshot?.volume ?? 60}" aria-label="Preset volume">
+      <div class="muted small">${snapshot?.volume ?? '—'} / 100</div>
     </div>
-    <div class="card"><h3>NANOCORE assignments</h3>
-      <p class="muted small">Button names and MIDI targets belong to preset ${state.activePreset} and are edited in the main panel.</p>
-    </div>`;
+    <div class="field">
+      <div class="row-actions">
+        <button data-action="step-preset" data-delta="-1" aria-label="Previous preset">◀</button>
+        <button data-action="recall-preset" data-preset="${state.activePreset}">Recall preset</button>
+        <button data-action="step-preset" data-delta="1" aria-label="Next preset">▶</button>
+      </div>
+    </div>
+    <h3>Presets</h3>
+    ${presets || '<p class="muted small">No preset bindings yet.</p>'}
+    <p class="muted small">Names come from the pedal. MIDI bindings stay in this browser.</p>`;
   $('#content').innerHTML = renderEditor(ctx);
 }
 

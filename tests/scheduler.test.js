@@ -95,6 +95,42 @@ test('SysEx requests keep distinct keys so replies still match', () => {
   assert.equal(writes.length, 2);
 });
 
+test('SysEx writes get a longer cooldown than CC writes', () => {
+  const { scheduler, writes, clock } = setup({ sysexGapMs: 100 });
+  scheduler.send([0xf0, 0x01]);
+  scheduler.send([0xf0, 0x02]);
+  clock.advance(25);
+  assert.deepEqual(writes, [[0xf0, 0x01]]);
+  clock.advance(99);
+  assert.equal(writes.length, 1, 'the second SysEx must wait the longer gap');
+  clock.advance(1);
+  assert.deepEqual(writes[1], [0xf0, 0x02]);
+});
+
+test('a CC queued behind SysEx inherits the longer cooldown', () => {
+  const { scheduler, writes, clock } = setup({ sysexGapMs: 100 });
+  scheduler.send([0xf0, 0x01]);
+  scheduler.send([0xb0, 20, 100]);
+  clock.advance(25);
+  assert.equal(writes.length, 1);
+  clock.advance(99);
+  assert.equal(writes.length, 1);
+  clock.advance(1);
+  assert.deepEqual(writes[1], [0xb0, 20, 100]);
+});
+
+test('a long mixed burst keeps strict FIFO order', () => {
+  const { scheduler, writes, clock } = setup({ sysexGapMs: 100 });
+  const expected = [];
+  for (let i = 0; i < 12; i++) {
+    const bytes = i % 2 ? [0xb0, 20 + i, 1] : [0xf0, i];
+    expected.push(bytes);
+    scheduler.send(bytes);
+  }
+  for (let i = 0; i < 12; i++) clock.advance(125);
+  assert.deepEqual(writes, expected);
+});
+
 test('every queued caller resolves when its message is written', async () => {
   const { scheduler, clock } = setup();
   let resolved = 0;

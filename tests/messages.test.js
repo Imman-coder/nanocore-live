@@ -60,6 +60,11 @@ test('set-field 0x01 writes one normalized parameter with a float32', () => {
   );
 });
 
+
+test('preset volume is a raw 0-100 value in set-field 0x04', () => {
+  const frame = buildRequestSysEx(COMMAND.SET_FIELD, [FIELD.VOLUME, 60], 7);
+  assert.deepEqual(parseSysEx(frame).payload, [FIELD.VOLUME, 60]);
+});
 test('device replies carry status and echo sequence and command', () => {
   const reply = [
     0xf0, 0x7d, 0x4e, 0x43, 0x71,

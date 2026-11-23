@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { resolveFirmware, typesFor } from '../src/core/versions.js';
+import { resolveFirmware, typesFor, extraCommonParams } from '../src/core/versions.js';
 import { createDefaultState } from '../src/core/store.js';
 
 test('auto firmware follows the settings layout hint', () => {
@@ -38,6 +38,18 @@ test('AMP and CAB have no static type list; their names come from the device', (
 
 
 
+
+
+test('firmware 1.12+ adds CAB Output Level on CC67', () => {
+  assert.deepEqual(extraCommonParams('cab', '1.10'), []);
+  for (const firmware of ['1.12', '1.2', '1.3.5', '1.2-modified']) {
+    const params = extraCommonParams('cab', firmware);
+    assert.equal(params.length, 1);
+    assert.equal(params[0].label, 'Level');
+    assert.equal(params[0].cc, 67);
+    assert.deepEqual([params[0].min, params[0].max], [0, 100]);
+  }
+});
 
 test('firmware 1.2 uses the real IDs for the numbered MOD variants', () => {
   const mod = typesFor('mod', '1.2');

@@ -2,6 +2,7 @@
 // Editing belongs in the Editor; this view only presents and triggers.
 import { BLOCK_BY_ID } from '../core/spec.js';
 import { effectiveStompLabel } from '../core/store.js';
+import { sceneStored } from '../core/live.js';
 import { renderAssignmentTable } from './assignments.js';
 import { presetOptions } from './editor.js';
 
@@ -43,18 +44,46 @@ export function renderLive(ctx) {
     const summary = targets.length
       ? targets.map((t) => `${BLOCK_BY_ID[t.block]?.name ?? t.block}${typeof t.value === 'number' ? `=${t.value}` : ''}`).join(', ')
       : 'unassigned';
-    return `<button class="stomp" data-action="stomp" data-fs="${fs.id}" title="Click to trigger the same action as the footswitch">
+    return `<button class="stomp ${ctx.stompActive(fs.id) ? 'on' : ''}" data-action="stomp" data-fs="${fs.id}" aria-pressed="${ctx.stompActive(fs.id)}" title="Click to toggle the assigned FX on or off">
       <span class="stomp-label">${escapeHtml(effectiveStompLabel(ctx.state, assignments, fs.id))}</span>
       <span class="stomp-cc">${escapeHtml(fs.name)} · ${ctx.describeTrigger(fs.trigger)}</span>
       <span class="stomp-cc">${escapeHtml(summary)}</span>
     </button>`;
   }).join('');
+  const tempo = ctx.state.globals.tempo ?? { bpm: null };
+  const tapTempo = `<button class="stomp scene-stomp" data-action="tap-tempo">
+      <span class="stomp-label">Tap tempo</span>
+      <span class="stomp-cc">${tempo.bpm ? `${tempo.bpm} BPM · tap to retap` : 'tap to set BPM'}</span>
+    </button>`;
 
-  const expressions = assignments.expressions.map((expr, index) => `
-    <div class="binding">
-      <div class="field"><b>Expression ${index + 1}</b><span class="muted small">${ctx.describeTrigger(expr.trigger)} → ${BLOCK_BY_ID[expr.target]?.name ?? expr.target} param ${expr.paramIndex ?? 0}</span></div>
-      <div class="meter"><i id="expr-meter-${index}" style="width:${Math.round(expr.lastValue ?? 0)}%"></i></div>
-    </div>`).join('') || '<p class="muted small">No expression pedals assigned to this preset.</p>';
+  const expressions = (ctx.state.globals.expressionPedals ?? []).map((pedal) => {
+    const expr = assignments.expressions.find((e) => e.id === pedal.id);
+    const target = expr
+      ? `${BLOCK_BY_ID[expr.target]?.name ?? expr.target} param ${expr.paramIndex ?? 0}`
+      : 'unassigned';
+    return `<div class="stomp expression-stomp ${expr ? '' : 'muted'}">
+      <div class="stomp-label">${escapeHtml(pedal.name)}</div>
+      <div class="stomp-cc">${ctx.describeTrigger(pedal.trigger)} → ${escapeHtml(target)}</div>
+      <div class="meter expression-meter ${expr && ctx.state.globals.interactiveLive ? 'interactive' : ''}"
+        data-expression-meter="${pedal.id}" role="slider" tabindex="0" aria-label="${escapeHtml(pedal.name)} level"
+        aria-valuemin="0" aria-valuemax="127" aria-valuenow="0">
+        <i id="expr-meter-${pedal.id}" style="width:0%"></i>
+      </div>
+      <div class="stomp-cc" id="expr-value-${pedal.id}">0%</div>
+    </div>`;
+  }).join('');
+
+  const scenes = ctx.sceneKeys().map((name) => {
+    const active = ctx.state.activeScene === name;
+    const stored = sceneStored(assignments, name);
+    const detail = !stored ? 'empty' : name === 'base'
+      ? (ctx.baseOverridden() ? 'saved values' : 'pedal values')
+      : `${Object.keys(assignments.scenes?.[name] ?? {}).length} values · ${Object.keys(assignments.sceneEnabled?.[name] ?? {}).length} fx`;
+    return `<button class="stomp scene-stomp ${active ? 'on' : ''} ${stored ? '' : 'empty'}" data-action="scene" data-scene="${name}" aria-pressed="${active}" ${stored ? '' : 'disabled aria-disabled="true"'}>
+      <span class="stomp-label">${escapeHtml(ctx.sceneName(name))}</span>
+      <span class="stomp-cc">${active ? 'Active · ' : ''}${escapeHtml(detail)}</span>
+    </button>`;
+  }).join('');
 
   const advanced = ctx.state.showAdvanced ? `<div class="card">
     <h3>Advanced — raw assignments</h3>
@@ -63,13 +92,51 @@ export function renderLive(ctx) {
   </div>` : '';
 
   return `<h2>Live <span class="muted small">— NANOCORE preset ${preset}</span></h2>
+    <h3>Scenes</h3>
+    <div class="stomp-grid">${scenes}${tapTempo}</div>
     <h3>Virtual footswitches</h3>
     <div class="stomp-grid">${stomps}</div>
     <h3>Expression pedals</h3>
-    ${expressions}
+    <div class="stomp-grid expression-grid">${expressions}</div>
     <p style="margin-top:18px">
       <button class="ghost" data-action="toggle-advanced">${ctx.state.showAdvanced ? 'Hide' : 'Show'} parameter assignments</button>
       <button class="ghost" data-mode="editor">Open editor / assignments</button>
     </p>
     ${advanced}`;
 }
+
+let draggedExpression = null;
+
+function setExpressionFromPointer(meter, clientX) {
+  const rect = meter.getBoundingClientRect();
+  if (!rect.width) return;
+  const value = Math.max(0, Math.min(127, Math.round(((clientX - rect.left) / rect.width) * 127)));
+  meter.setAttribute('aria-valuenow', String(value));
+  window.__nanocoreCtx?.sendExpression(meter.dataset.expressionMeter, value);
+}
+
+document.addEventListener('pointerdown', (event) => {
+  const meter = event.target.closest?.('[data-expression-meter].interactive');
+  if (!meter) return;
+  event.preventDefault();
+  draggedExpression = meter;
+  try { meter.setPointerCapture?.(event.pointerId); } catch { /* synthetic pointer */ }
+  setExpressionFromPointer(meter, event.clientX);
+});
+
+document.addEventListener('pointermove', (event) => {
+  if (!draggedExpression) return;
+  setExpressionFromPointer(draggedExpression, event.clientX);
+});
+
+document.addEventListener('pointerup', () => { draggedExpression = null; });
+
+document.addEventListener('keydown', (event) => {
+  const meter = event.target.closest?.('[data-expression-meter].interactive');
+  if (!meter || !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
+  event.preventDefault();
+  const step = event.key === 'ArrowLeft' || event.key === 'ArrowDown' ? -5 : 5;
+  const value = Math.max(0, Math.min(127, Number(meter.getAttribute('aria-valuenow')) + step));
+  meter.setAttribute('aria-valuenow', String(value));
+  window.__nanocoreCtx?.sendExpression(meter.dataset.expressionMeter, value);
+});

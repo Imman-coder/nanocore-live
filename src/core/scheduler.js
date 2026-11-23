@@ -25,13 +25,15 @@ export function midiKey(bytes) {
 
 export function createMidiScheduler({
   writer,
-  gapMs = 2,
-  coalesceMs = 2,
+  gapMs = 0,
+  sysexGapMs = null,
+  coalesceMs = 0,
   now = () => Date.now(),
   setTimer = (fn, ms) => setTimeout(fn, ms),
   clearTimer = (id) => clearTimeout(id),
 } = {}) {
   const queue = [];
+  const cooldownFor = (bytes) => (bytes?.[0] === 0xf0 && sysexGapMs !== null ? sysexGapMs : gapMs);
   let nextFree = 0;
   let timer = null;
   let count = 0;
@@ -58,7 +60,7 @@ export function createMidiScheduler({
     } catch (error) {
       for (const reject of item.rejects) reject(error);
     }
-    nextFree = now() + gapMs;
+    nextFree = now() + cooldownFor(item.bytes);
     schedule();
   }
 

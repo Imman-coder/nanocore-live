@@ -35,6 +35,20 @@ function setup(overrides = {}) {
   return { router, sent, events, row };
 }
 
+test('a configured MIDI trigger taps tempo on a nonzero value', () => {
+  const tapGlobals = { ...globals, tapTempoSwitch: { id: 'TAP', trigger: { type: 'cc', channel: 1, number: 87 } } };
+  let taps = 0;
+  const router = createRouter({
+    globals: tapGlobals,
+    getActiveRow: () => ({ expressions: [] }),
+    send: () => {},
+    onTapTempo: () => { taps++; },
+  });
+  router.handleMidi({ port: 'GT-10', bytes: [0xb0, 87, 127] });
+  router.handleMidi({ port: 'GT-10', bytes: [0xb0, 87, 0] });
+  assert.equal(taps, 1);
+});
+
 test('a footswitch value of 0 turns off every block assigned to it', () => {
   const { router, sent } = setup();
   router.handleMidi({ port: 'GT-10', bytes: [0xb0, 6, 0] });

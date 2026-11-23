@@ -64,7 +64,8 @@ export const REPLACE_PARAMS_12 = {
   },
   mod: {
     phaser_ii: [r('Depth', 0, 100, '', 0), r('Rate', 0.05, 5, 'Hz', 2), r('Feedback', -95, 95, '', 0), MIX],
-    jet_flanger: [r('Rate', 0.05, 5, 'Hz', 2), r('Depth', 0, 100, '', 0),
+    jet_flanger: [{ ...r('Rate', 0.05, 5, 'Hz', 2), cc: 68 },
+      { ...r('Depth', 0, 100, '', 0), cc: 69 },
       r('Feedback', -95, 95, '', 0), r('Phase', 0, 360, '°', 0), MIX],
   },
 };

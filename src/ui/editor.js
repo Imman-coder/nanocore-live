@@ -5,7 +5,8 @@ import { buildCc, buildRequestSysEx, COMMAND } from '../core/messages.js';
 import { ccToEnum, enumToCc } from '../core/scaling.js';
 import { openPedalPopup } from './pedal-popup.js';
 import { renderKnob } from './knob.js';
-import { typesFor } from '../core/versions.js';
+import { typesFor, extraCommonParams } from '../core/versions.js';
+import { sceneStored } from '../core/live.js';
 
 let currentCtx = null;
 
@@ -19,6 +20,7 @@ export function renderEditor(ctx) {
       <label class="small">NANOCORE preset</label>
       <select id="preset-select">${presetOptions(ctx, preset)}</select>
       <button id="editor-read">Read snapshot</button>
+      <button id="save-preset" class="primary" title="Write live RAM permanently into this NANOCORE preset">Save to pedal</button>
     </div>
     <div class="muted small">${ctx.snapshot
       ? `Loaded from the pedal: preset ${ctx.snapshot.activePreset + 1}, volume ${ctx.snapshot.volume}`
@@ -57,13 +59,9 @@ export function renderEditor(ctx) {
 
   return `<h2>Editor <span class="muted small">— NANOCORE preset ${preset}</span></h2>
     ${header}
-    <h3>Effect chain <span class="muted small">— drag blocks to reorder, click to edit</span></h3>
+    <h3>Effect chain <span class="muted small">— click to edit · long drag to reorder</span></h3>
     <div class="chain-strip">${chain.map((id, i) => `${i ? '<span class="chain-arrow">→</span>' : ''}${rows[i] ?? ''}`).join('')}</div>
-    <div class="detail-card card">${detail(ctx, selected, byId[selected])}</div>
-    <div class="card"><h3>Save</h3>
-      <p class="small muted">Writes the pedal's current live state permanently into NANOCORE preset ${preset}.</p>
-      <button id="save-preset" class="primary">Save to pedal</button>
-    </div>`;
+    <div class="detail-card card">${detail(ctx, selected, byId[selected])}</div>`;
 }
 
 function detail(ctx, blockId, live) {
@@ -79,10 +77,11 @@ function detail(ctx, blockId, live) {
     : blockId === 'amp' || blockId === 'cab'
       ? `<option value="${live.variant}">Loading names from pedal…</option>`
       : versions.map((t) => `<option value="${t.id}" ${t.id === live.variant ? 'selected' : ''}>${escapeHtml(t.name)}</option>`).join('');
-  const params = [...block.commonParams, ...(type?.params ?? [])];
+  const params = [...block.commonParams, ...extraCommonParams(blockId, ctx.firmware), ...(type?.params ?? [])];
   const stomp = ctx.assignments.blockStomps[blockId];
   const fsId = typeof stomp === 'string' ? stomp : stomp?.fs;
   const warning = block.warning ?? type?.warning;
+  const sceneOn = ctx.sceneBlockEnabled(blockId);
 
   return `<div class="detail-head">
       <h2 style="margin:0">${escapeHtml(block.name)}</h2>
@@ -90,6 +89,21 @@ function detail(ctx, blockId, live) {
       <label class="switch"><input type="checkbox" data-edit="enabled" data-block="${blockId}" ${live.enabled ? 'checked' : ''}><span class="slider"></span> ${live.enabled ? 'On' : 'Off'}</label>
     </div>
     ${warning ? `<div class="warning">${escapeHtml(warning)}</div>` : ''}
+    <div class="field">
+      <label class="switch"><input type="checkbox" data-edit="scene-participate" data-block="${blockId}" ${sceneOn ? 'checked' : ''}><span class="slider"></span> Participate in scenes</label>
+      <span class="muted small">Off hides the scenes here and leaves this block out of scene saves and recalls; previously saved values are kept.</span>
+    </div>
+    <h3>Expression mapping <span class="muted small">— assign by right-clicking a knob</span></h3>
+    <div class="expr-map-row">
+      ${(ctx.state.globals.expressionPedals ?? []).map((pedal) => {
+        const entry = Object.entries(ctx.assignments.paramPedals)
+          .find(([, mapping]) => mapping?.pedal === pedal.id);
+        const target = entry
+          ? `${BLOCK_BY_ID[entry[0].split(':')[0]]?.name ?? entry[0].split(':')[0]} · ${Number(entry[0].split(':')[1]) + 1}`
+          : 'free';
+        return `<span class="expr-map ${entry ? 'assigned' : ''}"><b>${escapeHtml(pedal.id)}</b> ${escapeHtml(target)}</span>`;
+      }).join('')}
+    </div>
     <h3>Stomp switch <span class="muted small">— one footswitch can drive this block</span></h3>
     <div class="radio-row">
       ${ctx.state.globals.footswitches.map((fs) => `<button class="radio-card ${fsId === fs.id ? 'active' : ''}"
@@ -98,17 +112,30 @@ function detail(ctx, blockId, live) {
       <button class="radio-card ${!fsId ? 'active' : ''}" data-action="select-stomp" data-block="${blockId}" data-fs="">
         <b>None</b><span class="muted small">unassigned</span></button>
     </div>
-    <h3>Scenes <span class="muted small">— store the current parameter values, recall instantly</span></h3>
+    ${sceneOn ? `<h3>Scenes <span class="muted small">— store the current parameter values, recall instantly</span></h3>
     <div class="radio-row scene-row">
-      ${['base', 'scene1', 'scene2'].map((scene) => `<button class="radio-card ${ctx.state.activeScene === scene ? 'active' : ''}"
-        data-action="select-scene" data-scene="${scene}">
-        <b>${scene === 'base' ? 'Base' : `Scene ${scene.slice(-1)}`}</b>
-        <span class="muted small">${scene === 'base' ? 'pedal values'
-          : `${Object.keys(ctx.assignments.scenes?.[scene] ?? {}).length} values · ${Object.keys(ctx.assignments.sceneEnabled?.[scene] ?? {}).length} fx`}</span></button>`).join('')}
-      <button class="radio-card" data-action="store-scene" data-scene="${ctx.state.activeScene}">
+      ${ctx.sceneKeys().map((scene) => {
+        const active = ctx.state.activeScene === scene;
+        const stored = sceneStored(ctx.assignments, scene);
+        const detail = !stored ? 'empty — select, then Store' : scene === 'base'
+          ? (ctx.baseOverridden() ? 'saved values' : 'pedal values')
+          : `${Object.keys(ctx.assignments.scenes?.[scene] ?? {}).length} values · ${Object.keys(ctx.assignments.sceneEnabled?.[scene] ?? {}).length} fx`;
+        return `<button class="radio-card ${active ? 'active' : ''} ${stored ? '' : 'empty'}"
+          data-action="select-scene" data-scene="${scene}">
+          <b>${escapeHtml(ctx.sceneName(scene))}</b>
+          <span class="muted small">${escapeHtml(detail)}</span></button>`;
+      }).join('')}
+      <button class="radio-card" data-action="store-scene" data-scene="${ctx.state.activeScene}"
+        ${ctx.state.activeScene === 'base' && !ctx.state.globals.baseOverride ? 'disabled' : ''}>
         <b>Store to ${ctx.state.activeScene === 'base' ? 'Base' : `Scene ${ctx.state.activeScene.slice(-1)}`}</b>
-        <span class="muted small">save current values here</span></button>
+        <span class="muted small">${ctx.state.activeScene === 'base' && !ctx.state.globals.baseOverride
+          ? 'enable Base override in Globals' : 'save current values here'}</span></button>
     </div>
+    <div class="field scene-names">
+      ${ctx.sceneKeys().filter((scene) => scene !== 'base').map((scene) => `
+        <label>${escapeHtml(ctx.sceneName(scene))}</label>
+        <input data-scene-rename="${scene}" value="${escapeHtml(ctx.sceneName(scene))}" aria-label="Rename ${escapeHtml(ctx.sceneName(scene))}">`).join('')}
+    </div>` : '<p class="muted small">Scenes are hidden for this block. Switch “Participate in scenes” back on to resume — saved values are not discarded.</p>'}
     <h3>Parameters <span class="muted small">— right-click a parameter to assign an expression pedal</span></h3>
     <div class="param-list">
       ${params.map((param, index) => paramRow(ctx, blockId, param, live.params[index], index)).join('')
@@ -145,7 +172,7 @@ function paramRow(ctx, blockId, param, normalized, index) {
     const selected = ccToEnum(Math.round(n * 127), options);
     knob = renderKnob({
       id, value: selected, max: Math.max(1, options.length - 1),
-      label: `${escapeHtml(param.label)} ${badge}`, display: escapeHtml(options[selected] ?? ''),
+      label: escapeHtml(param.label), display: escapeHtml(options[selected] ?? ''),
       data: `${common} data-kind="enum" data-options="${escapeHtml(JSON.stringify(options))}" data-step-label="${escapeHtml(options.join('|'))}"`,
     });
   } else {
@@ -153,13 +180,14 @@ function paramRow(ctx, blockId, param, normalized, index) {
     const decimals = param.decimals ?? 2;
     knob = renderKnob({
       id, value: Math.round(n * 127), max: 127,
-      label: `${escapeHtml(param.label)} ${badge}`,
+      label: escapeHtml(param.label),
       display: `${value.toFixed(decimals)}${param.unit ? ' ' + escapeHtml(param.unit) : ''}`,
       data: `${common} data-kind="range" data-min="${param.min}" data-max="${param.max}" data-decimals="${decimals}" data-unit="${escapeHtml(param.unit ?? '')}"`,
     });
   }
   return `<div class="param" data-param-block="${blockId}" data-param-index="${index}"
     data-param-label="${escapeHtml(param.label)}" title="Right-click to assign an expression pedal">
+    ${badge ? `<div class="param-assignment">${badge}</div>` : ''}
     ${knob}
   </div>`;
 }
@@ -258,7 +286,7 @@ document.addEventListener('click', (event) => {
   const stomp = event.target.closest('[data-action="select-stomp"]');
   if (stomp) return ctx.setBlockStomp(ctx.state.activePreset, stomp.dataset.block, stomp.dataset.fs || null);
   const scene = event.target.closest('[data-action="select-scene"]');
-  if (scene) return ctx.recallScene(scene.dataset.scene);
+  if (scene) return ctx.selectScene(scene.dataset.scene);
   const store = event.target.closest('[data-action="store-scene"]');
   if (store) return ctx.storeScene(store.dataset.scene);
 });
@@ -295,8 +323,10 @@ document.addEventListener('change', (event) => {
   const ctx = currentCtx;
   if (!ctx) return;
   if (el.dataset?.editor === 'preset-name') return ctx.updatePreset(ctx.state.activePreset, { name: el.value });
+  if (el.dataset?.sceneRename) return ctx.renameScene(el.dataset.sceneRename, el.value);
   if (!el.dataset?.edit) return;
   const channel = ctx.state.globals.midiChannel ?? 1;
+  if (el.dataset.edit === 'scene-participate') return ctx.setSceneBlock(el.dataset.block, el.checked);
   if (el.dataset.edit === 'enabled') {
     ctx.send(buildCc(channel, BLOCK_BY_ID[el.dataset.block].onOffCc, el.checked ? 127 : 0));
     ctx.noteEnabled(el.dataset.block, el.checked);

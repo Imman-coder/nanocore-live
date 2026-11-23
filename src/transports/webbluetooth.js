@@ -6,18 +6,63 @@ export const BLE_MIDI_CHARACTERISTIC = '7772e5db-3868-4112-a1a9-f2669d106bf3';
 
 export class BleMidiStreamDecoder {
   constructor() {
-    this.buffer = [];
+    this.sysex = null;
+  }
+
+  consume(packet, index, out) {
+    while (index < packet.length) {
+      const byte = packet[index++];
+      this.sysex.push(byte);
+      if (byte === 0xf7) {
+        out.push(this.sysex);
+        this.sysex = null;
+        break;
+      }
+    }
+    return index;
   }
 
   push(packet) {
-    const data = [...packet].slice(2); // strip the two timestamp bytes
-    if (this.buffer.length === 0 && data[0] !== 0xf0) return [data];
-    this.buffer.push(...data);
-    const end = this.buffer.indexOf(0xf7);
-    if (end === -1) return [];
-    const message = this.buffer.slice(0, end + 1);
-    this.buffer = [];
-    return [message];
+    const out = [];
+    const bytes = [...packet];
+    if (bytes.length < 2 || (this.sysex === null && !(bytes[0] & 0x80))) return out;
+    let i = 0;
+    while (i < bytes.length) {
+      const byte = bytes[i];
+      if (this.sysex !== null && byte < 0x80) {
+        i = this.consume(bytes, i, out);
+        continue;
+      }
+      if (!(byte & 0x80)) { i++; continue; }
+      // Some devices send a split-SysEx continuation with only the high header
+      // byte followed directly by data. A normal message has two header bytes.
+      if (this.sysex !== null && i + 1 < bytes.length && bytes[i + 1] < 0x80) {
+        i = this.consume(bytes, i + 1, out);
+        continue;
+      }
+      i += 2; // high + low timestamp
+      if (i >= bytes.length) break;
+      const first = bytes[i];
+      if (this.sysex !== null && first < 0x80) {
+        i = this.consume(bytes, i, out);
+        continue;
+      }
+      if (first === 0xf0) {
+        this.sysex = [0xf0];
+        i = this.consume(bytes, i + 1, out);
+        continue;
+      }
+      if (first >= 0x80 && first <= 0xef) {
+        const size = (first & 0xe0) === 0xc0 || (first & 0xe0) === 0xd0 ? 2 : 3;
+        const message = bytes.slice(i, i + size);
+        if (message.length === size) out.push(message);
+        i += size;
+        continue;
+      }
+      if (first & 0x80) { i += 1; continue; }
+      i += 1;
+    }
+    return out;
   }
 }
 
@@ -44,7 +89,11 @@ export function createWebBluetoothTransport({ navigator: nav = globalThis.naviga
       characteristic.addEventListener('characteristicvaluechanged', (event) => {
         const value = event.target?.value;
         if (!value) return;
-        for (const bytes of decoder.push(value)) {
+        // Web Bluetooth exposes a DataView; Node-style Uint8Arrays are iterable but DataView is not.
+        const packet = value instanceof Uint8Array
+          ? value
+          : new Uint8Array(value.buffer ?? value, value.byteOffset ?? 0, value.byteLength ?? undefined);
+        for (const bytes of decoder.push(packet)) {
           const message = { port: device?.name ?? 'BLE NANOCORE', bytes, timestamp: Date.now() };
           for (const cb of listeners) cb(message);
         }

@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import {
   createDefaultState, loadState, saveState, exportState, importState,
   setActivePreset, updatePreset, upsertStomp, upsertExpression,
-  setBlockStomp, setParamPedal, pedalOwner, setScene, setSceneEnabled,
-  effectiveStompLabel, assignmentsFor,
+  setBlockStomp, setParamPedal, pedalOwner, setScene, setSceneEnabled, setSceneBlock,
+  effectiveStompLabel, assignmentsFor, normalizeState, renameScene,
 } from '../src/core/store.js';
 
 function memoryStorage(initial = {}) {
@@ -89,6 +89,14 @@ test('import rejects a document from an incompatible version', () => {
 
 
 
+test('sceneBlocks is a per-preset map defaulting to all blocks participating', () => {
+  let state = createDefaultState();
+  assert.deepEqual(state.presets['1'].sceneBlocks, {});
+  state = setSceneBlock(state, 1, 'mod', false);
+  assert.equal(state.presets['1'].sceneBlocks.mod, false);
+  assert.equal(state.presets['2']?.sceneBlocks?.mod, undefined);
+});
+
 test('scenes are stored per preset and normalised', () => {
   let state = createDefaultState();
   state = setScene(state, 7, 'scene1', { 'del:0': 0.5, 'mod:1': 0.25 });
@@ -112,6 +120,56 @@ test('fx on/off states are stored per scene', () => {
   state = setSceneEnabled(state, 3, 'scene1', { fx1: false, mod: true });
   assert.deepEqual(assignmentsFor(state, 3).sceneEnabled.scene1, { fx1: false, mod: true });
   assert.deepEqual(assignmentsFor(createDefaultState(), 3).sceneEnabled.scene2, {});
+});
+
+
+test('tap tempo has a default MIDI trigger', () => {
+  const g = createDefaultState().globals;
+  assert.equal(g.tapTempoSwitch.id, 'TAP');
+  assert.equal(g.tapTempoSwitch.trigger.number, 87);
+});
+
+test('tempo settings default to a 4/4 eighth-note sync', () => {
+  const g = createDefaultState().globals;
+  assert.equal(g.tempoSync, true);
+  assert.equal(g.tempo.bpm, null);
+  assert.equal(g.tempo.signature, '4/4');
+  assert.equal(g.tempo.subdivision, '1/8');
+});
+
+test('interactive live mode is an opt-in global', () => {
+  assert.equal(createDefaultState().globals.interactiveLive, false);
+  assert.equal(normalizeState({ globals: { interactiveLive: true } }).globals.interactiveLive, true);
+});
+
+test('base override is an opt-in global defaulting to off', () => {
+  assert.equal(createDefaultState().globals.baseOverride, false);
+  assert.equal(normalizeState({ globals: { baseOverride: true } }).globals.baseOverride, true);
+});
+
+test('globals default to three scene choices and grow to at most six', () => {
+  const base = createDefaultState();
+  assert.equal(base.globals.sceneCount, 3);
+  assert.equal(base.globals.sceneNames, undefined);
+  const grown = normalizeState({ globals: { sceneCount: 6 } });
+  assert.equal(grown.globals.sceneCount, 6);
+  assert.equal(grown.globals.sceneSwitches.length, 6);
+  assert.deepEqual(grown.globals.sceneSwitches.map((s) => s.scene),
+    ['base', 'scene1', 'scene2', 'scene3', 'scene4', 'scene5']);
+  const clamped = normalizeState({ globals: { sceneCount: 99 } });
+  assert.equal(clamped.globals.sceneCount, 6);
+});
+
+test('scene names are stored per preset, not globally', () => {
+  let state = createDefaultState();
+  assert.equal(assignmentsFor(state, 1).sceneNames.scene1, 'Scene 1');
+  state = renameScene(state, 1, 'scene1', 'Rhythm');
+  assert.equal(assignmentsFor(state, 1).sceneNames.scene1, 'Rhythm');
+  assert.equal(assignmentsFor(state, 2).sceneNames.scene1, 'Scene 1');
+  state = setScene(state, 2, 'scene4', { 'fx1:0': 0.4 });
+  assert.equal(state.presets['2'].scenes.scene4['fx1:0'], 0.4);
+  const restored = importState(exportState(state));
+  assert.equal(assignmentsFor(restored, 1).sceneNames.scene1, 'Rhythm');
 });
 
 test('default state has four virtual expression pedals', () => {

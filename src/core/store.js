@@ -6,6 +6,13 @@ export const STATE_VERSION = 1;
 let counter = 0;
 const uid = (prefix) => `${prefix}-${Date.now().toString(36)}-${(counter++).toString(36)}`;
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
+export const USER_SCENE_KEYS = ['scene1', 'scene2', 'scene3', 'scene4', 'scene5', 'scene6'];
+const defaultSceneSwitches = (count) => Array.from({ length: count }, (_, i) => ({
+  id: `S${i + 1}`,
+  name: i === 0 ? 'Base' : `Scene ${i}`,
+  scene: i === 0 ? 'base' : `scene${i}`,
+  trigger: { type: 'cc', channel: 1, number: 84 + i },
+}));
 
 const defaultPedals = () => [7, 11, 1, 4].map((number, i) => ({
   id: `E${i + 1}`, name: `Expression ${i + 1}`, trigger: { type: 'cc', channel: 1, number },
@@ -18,14 +25,13 @@ export function normalizePreset(preset = {}) {
     expressions: Array.isArray(preset.expressions) ? preset.expressions : [],
     blockStomps: isObject(preset.blockStomps) ? preset.blockStomps : {},
     paramPedals: isObject(preset.paramPedals) ? preset.paramPedals : {},
-    scenes: {
-      scene1: isObject(preset.scenes?.scene1) ? preset.scenes.scene1 : {},
-      scene2: isObject(preset.scenes?.scene2) ? preset.scenes.scene2 : {},
-    },
-    sceneEnabled: {
-      scene1: isObject(preset.sceneEnabled?.scene1) ? preset.sceneEnabled.scene1 : {},
-      scene2: isObject(preset.sceneEnabled?.scene2) ? preset.sceneEnabled.scene2 : {},
-    },
+    sceneNames: Object.fromEntries(USER_SCENE_KEYS.map((key, i) =>
+      [key, preset.sceneNames?.[key] || `Scene ${i + 1}`])),
+    sceneBlocks: isObject(preset.sceneBlocks) ? { ...preset.sceneBlocks } : {},
+    scenes: Object.fromEntries(USER_SCENE_KEYS.map((key) =>
+      [key, isObject(preset.scenes?.[key]) ? preset.scenes[key] : {}])),
+    sceneEnabled: Object.fromEntries(USER_SCENE_KEYS.map((key) =>
+      [key, isObject(preset.sceneEnabled?.[key]) ? preset.sceneEnabled[key] : {}])),
   };
 }
 
@@ -73,11 +79,13 @@ export function createDefaultState() {
         id: `FS${n}`, name: `Stomp ${n}`, trigger: { type: 'cc', channel: 1, number: n + 4 },
       })),
       expressionPedals: defaultPedals(),
-      sceneSwitches: [
-        { id: 'S1', name: 'Base', scene: 'base', trigger: { type: 'cc', channel: 1, number: 84 } },
-        { id: 'S2', name: 'Scene 1', scene: 'scene1', trigger: { type: 'cc', channel: 1, number: 85 } },
-        { id: 'S3', name: 'Scene 2', scene: 'scene2', trigger: { type: 'cc', channel: 1, number: 86 } },
-      ],
+      baseOverride: false,
+      interactiveLive: false,
+      tempoSync: true,
+      tempo: { bpm: null, signature: '4/4', subdivision: '1/8' },
+      sceneCount: 3,
+      sceneSwitches: defaultSceneSwitches(3),
+      tapTempoSwitch: { id: 'TAP', name: 'Tap tempo', trigger: { type: 'cc', channel: 1, number: 87 } },
     },
     presets: { '1': normalizePreset({ preset: 1 }) },
     activePreset: 1,
@@ -101,7 +109,15 @@ export function normalizeState(state) {
   const globals = { ...base.globals, ...(state?.globals ?? {}) };
   if (!Array.isArray(globals.footswitches) || !globals.footswitches.length) globals.footswitches = base.globals.footswitches;
   if (!Array.isArray(globals.expressionPedals) || !globals.expressionPedals.length) globals.expressionPedals = base.globals.expressionPedals;
-  if (!Array.isArray(globals.sceneSwitches) || globals.sceneSwitches.length !== 3) globals.sceneSwitches = base.globals.sceneSwitches;
+  const sceneCount = Math.max(3, Math.min(6, Number(globals.sceneCount) || 3));
+  globals.tapTempoSwitch = globals.tapTempoSwitch ?? base.globals.tapTempoSwitch;
+  globals.sceneCount = sceneCount;
+  const switches = defaultSceneSwitches(sceneCount);
+  const existingSwitches = Array.isArray(globals.sceneSwitches) ? globals.sceneSwitches : [];
+  globals.sceneSwitches = switches.map((sw, i) => {
+    const old = existingSwitches.find((s) => s?.id === sw.id);
+    return old ? { ...sw, ...old, id: sw.id, scene: old.scene ?? sw.scene } : sw;
+  });
   return {
     ...base,
     ...state,
@@ -171,12 +187,14 @@ export function assignmentsFor(state, preset) {
   });
   return {
     name: record.name,
+    sceneNames: record.sceneNames,
     stomps: [...byStomp.values()],
     expressions,
     blockStomps: record.blockStomps,
     paramPedals: record.paramPedals,
     scenes: record.scenes,
     sceneEnabled: record.sceneEnabled,
+    sceneBlocks: record.sceneBlocks,
   };
 }
 
@@ -205,8 +223,16 @@ export function setParamPedal(state, preset, block, paramIndex, config) {
   return updatePreset(state, preset, { paramPedals });
 }
 
+export function renameScene(state, preset, name, label) {
+  if (!USER_SCENE_KEYS.includes(name)) return state;
+  const record = presetRecord(state, preset);
+  return updatePreset(state, preset, {
+    sceneNames: { ...record.sceneNames, [name]: String(label ?? '').trim() || `Scene ${Number(name.slice(-1)) || 1}` },
+  });
+}
+
 export function setScene(state, preset, name, values) {
-  if (!['scene1', 'scene2'].includes(name)) return state;
+  if (!USER_SCENE_KEYS.includes(name)) return state;
   const record = presetRecord(state, preset);
   return updatePreset(state, preset, {
     scenes: { ...record.scenes, [name]: { ...(values ?? {}) } },
@@ -214,10 +240,17 @@ export function setScene(state, preset, name, values) {
 }
 
 export function setSceneEnabled(state, preset, name, enabled) {
-  if (!['scene1', 'scene2'].includes(name)) return state;
+  if (!USER_SCENE_KEYS.includes(name)) return state;
   const record = presetRecord(state, preset);
   return updatePreset(state, preset, {
     sceneEnabled: { ...record.sceneEnabled, [name]: { ...(enabled ?? {}) } },
+  });
+}
+
+export function setSceneBlock(state, preset, blockId, participates) {
+  const record = presetRecord(state, preset);
+  return updatePreset(state, preset, {
+    sceneBlocks: { ...record.sceneBlocks, [blockId]: Boolean(participates) },
   });
 }
 

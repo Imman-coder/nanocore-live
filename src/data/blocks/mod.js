@@ -19,7 +19,6 @@ export const mod = {
       params: [
         range('rate', 68, 0.1, 3.74, { unit: 'Hz', decimals: 2, default: 1 }),
         range('depth', 69, 0, 1, { unit: 'ms', decimals: 2, default: 0.5 }),
-        range('level', 70, 0, 100, { default: 70 }),
       ],
     },
     {
@@ -31,7 +30,6 @@ export const mod = {
         range('rate', 68, 0.05, 5, { unit: 'Hz', decimals: 2, default: 0.5 }),
         range('feedback', 69, -95, 95, { default: 30 }),
         range('mix', 70, 0, 100, { default: 50 }),
-        range('level', 71, 0, 100, { default: 70 }),
       ],
     },
     {
@@ -43,7 +41,6 @@ export const mod = {
         range('rate', 68, 0.05, 5, { unit: 'Hz', decimals: 2, default: 0.3 }),
         range('feedback', 69, -95, 95, { default: 50 }),
         range('mix', 70, 0, 100, { default: 50 }),
-        range('level', 71, 0, 100, { default: 70 }),
       ],
     },
     {
@@ -57,7 +54,6 @@ export const mod = {
         enumP('wave', 70, WAVE_OPTIONS, { default: 0 }),
         range('smooth', 71, 0, 40, { unit: 'Hz', decimals: 2, default: 5 }),
         range('mix', 72, 0, 100, { default: 100 }),
-        range('level', 73, 0, 100, { default: 70 }),
       ],
     },
     {
@@ -70,7 +66,6 @@ export const mod = {
         range('depth', 69, 0, 20, { unit: 'ms', decimals: 1, default: 3 }),
         enumP('wave', 70, WAVE_OPTIONS, { default: 0 }),
         range('mix', 71, 0, 100, { default: 50 }),
-        range('level', 72, 0, 100, { default: 70 }),
       ],
     },
     // --- Added in a later firmware update (post-1.04, exact version unconfirmed — the manual

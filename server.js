@@ -11,6 +11,8 @@ const types = {
   '.js': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
+  '.webmanifest': 'application/manifest+json',
+  '.png': 'image/png',
   '.svg': 'image/svg+xml',
 };
 
@@ -22,7 +24,10 @@ http.createServer(async (req, res) => {
     const info = await stat(file);
     if (info.isDirectory()) file = path.join(file, 'index.html');
     const body = await readFile(file);
-    res.writeHead(200, { 'content-type': types[path.extname(file)] ?? 'application/octet-stream' });
+    res.writeHead(200, {
+      'content-type': types[path.extname(file)] ?? 'application/octet-stream',
+      ...(path.basename(file) === 'sw.js' ? { 'service-worker-allowed': '/' } : {}),
+    });
     res.end(body);
   } catch (error) {
     res.writeHead(404, { 'content-type': 'text/plain' });

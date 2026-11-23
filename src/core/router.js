@@ -1,7 +1,8 @@
 // Turns inbound controller MIDI into outbound NANOCORE MIDI.
 // Pure logic: no browser APIs here, so it is fully testable in node.
 import { buildCc, buildPc, buildRequestSysEx, COMMAND, FIELD } from './messages.js';
-import { BLOCK_BY_ID, paramCcFor } from './spec.js';
+import { BLOCK_BY_ID } from './spec.js';
+import { expressionBytes } from './live.js';
 
 const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
 
@@ -32,7 +33,7 @@ export function describeTrigger(trigger) {
 const sameTrigger = (a, b) =>
   a && b && a.type === b.type && a.channel === b.channel && a.number === b.number;
 
-export function createRouter({ globals, getActiveRow, send, onEvent = () => {}, isDevicePort = () => false, getVariant = () => 0, onScene = () => {} }) {
+export function createRouter({ globals, getActiveRow, send, onEvent = () => {}, isDevicePort = () => false, getVariant = () => 0, onScene = () => {}, onTapTempo = () => {} }) {
   const blockStates = new Map();
   let learn = null;
   let learned = null;
@@ -85,21 +86,19 @@ export function createRouter({ globals, getActiveRow, send, onEvent = () => {}, 
       emit({ type: 'scene', switch: sw.id, scene: sw.scene });
     }
 
+    const tap = globals.tapTempoSwitch;
+    if (tap && sameTrigger(tap.trigger, message)) {
+      if (message.value !== undefined && message.value < 1) return;
+      onTapTempo();
+      emit({ type: 'tap-tempo', switch: tap.id });
+    }
+
     for (const expression of row.expressions ?? []) {
       if (!sameTrigger(expression.trigger, message)) continue;
-      const lo = expression.inputMin ?? 0;
-      const hi = expression.inputMax ?? 127;
-      let normalized = hi > lo ? clamp((message.value - lo) / (hi - lo), 0, 1) : 0;
-      if (expression.invert) normalized = 1 - normalized;
-      const ccValue = Math.round(normalized * 127);
       const variant = typeof expression.target === 'object' ? (expression.target.variant ?? 0) : getVariant(expression.target);
-      const cc = paramCcFor(
-        typeof expression.target === 'object' ? expression.target.block : expression.target,
-        expression.paramIndex ?? 0,
-        variant,
-      );
-      send(buildCc(globals.midiChannel ?? 1, cc, ccValue));
-      emit({ type: 'expression', expression: expression.id, cc, value: ccValue });
+      const bytes = expressionBytes(expression, globals.midiChannel ?? 1, variant, message.value);
+      send(bytes);
+      emit({ type: 'expression', expression: expression.id, cc: bytes[1], value: bytes[2] });
     }
   }
 

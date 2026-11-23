@@ -69,6 +69,15 @@ function reverb12(types) {
   return [...reordered, ...types.filter((type) => !order.includes(type.slug))];
 }
 
+// Common parameters added in later firmware. AMP/CAB have no static type list,
+// so their firmware-specific controls live here instead of in a type's params.
+export function extraCommonParams(blockId, firmware) {
+  if (blockId === 'cab' && LATER_FIRMWARES.has(firmware)) {
+    return [range('Level', 0, 100, 67, '%', 0)];
+  }
+  return [];
+}
+
 export function typesFor(blockId, firmware) {
   if (blockId === 'amp' || blockId === 'cab') return [];
   const block = BLOCK_BY_ID[blockId];
