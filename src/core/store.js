@@ -18,6 +18,20 @@ const defaultPedals = () => [7, 11, 1, 4].map((number, i) => ({
   id: `E${i + 1}`, name: `Expression ${i + 1}`, trigger: { type: 'cc', channel: 1, number },
 }));
 
+function expandLiveLayout(node, globals) {
+  if (!node) return node;
+  if (node.items) return { ...node, items: node.items.map((child) => expandLiveLayout(child, globals)) };
+  if (node.type !== 'item') return node;
+  if (node.kind === 'tap') return node;
+  const group = {
+    scenes: { kind: 'scene', ids: ['base', ...USER_SCENE_KEYS.slice(0, Math.max(0, (globals.sceneCount ?? 3) - 1))] },
+    stomps: { kind: 'stomp', ids: (globals.footswitches ?? []).map((f) => f.id) },
+    expressions: { kind: 'expression', ids: (globals.expressionPedals ?? []).map((p) => p.id) },
+  }[node.kind];
+  if (!group) return node;
+  return { type: 'row', items: group.ids.map((id) => ({ type: 'item', kind: group.kind, id })) };
+}
+
 export function normalizePreset(preset = {}) {
   return {
     name: preset.name ?? `Preset ${preset.preset ?? 1}`,
@@ -89,6 +103,22 @@ export function createDefaultState() {
       interactiveLive: false,
       tempoSync: true,
       tempo: { bpm: null, signature: '4/4', subdivision: '1/8' },
+      liveLayout: {
+        root: {
+          type: 'column',
+          items: [
+            { type: 'row', items: [
+              { type: 'item', kind: 'scene', id: 'base' },
+              { type: 'item', kind: 'scene', id: 'scene1' },
+              { type: 'item', kind: 'scene', id: 'scene2' },
+              { type: 'item', kind: 'tap' },
+            ] },
+            { type: 'row', items: [1, 2, 3, 4].map((n) => ({ type: 'item', kind: 'stomp', id: `FS${n}` })) },
+            { type: 'row', items: [1, 2, 3, 4].map((n) => ({ type: 'item', kind: 'expression', id: `E${n}` })) },
+          ],
+        },
+        hideSidebar: false,
+      },
       sceneCount: 3,
       sceneSwitches: defaultSceneSwitches(3),
       tapTempoSwitch: { id: 'TAP', name: 'Tap tempo', trigger: { type: 'cc', channel: 1, number: 87 } },
@@ -117,6 +147,8 @@ export function normalizeState(state) {
   if (!Array.isArray(globals.expressionPedals) || !globals.expressionPedals.length) globals.expressionPedals = base.globals.expressionPedals;
   const sceneCount = Math.max(3, Math.min(6, Number(globals.sceneCount) || 3));
   globals.tapTempoSwitch = globals.tapTempoSwitch ?? base.globals.tapTempoSwitch;
+  if (!isObject(globals.liveLayout?.root)) globals.liveLayout = base.globals.liveLayout;
+  globals.liveLayout = { ...globals.liveLayout, root: expandLiveLayout(globals.liveLayout.root, globals) };
   globals.sceneCount = sceneCount;
   const switches = defaultSceneSwitches(sceneCount);
   const existingSwitches = Array.isArray(globals.sceneSwitches) ? globals.sceneSwitches : [];
@@ -253,6 +285,10 @@ export function setSceneEnabled(state, preset, name, enabled) {
   return updatePreset(state, preset, {
     sceneEnabled: { ...record.sceneEnabled, [name]: { ...(enabled ?? {}) } },
   });
+}
+
+export function setLiveLayout(state, layout) {
+  return { ...state, globals: { ...state.globals, liveLayout: layout } };
 }
 
 export function setTempoSync(state, preset, blockId, patch) {

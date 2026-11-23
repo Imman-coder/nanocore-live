@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   createDefaultState, loadState, saveState, exportState, importState,
   setActivePreset, updatePreset, upsertStomp, upsertExpression,
-  setBlockStomp, setParamPedal, pedalOwner, setScene, setSceneEnabled, setSceneBlock, setBase, setTempoSync,
+  setBlockStomp, setParamPedal, pedalOwner, setScene, setSceneEnabled, setSceneBlock, setBase, setTempoSync, setLiveLayout,
   effectiveStompLabel, assignmentsFor, normalizeState, renameScene,
 } from '../src/core/store.js';
 
@@ -148,6 +148,35 @@ test('tempo settings default to a 4/4 eighth-note sync', () => {
 test('interactive live mode is an opt-in global', () => {
   assert.equal(createDefaultState().globals.interactiveLive, false);
   assert.equal(normalizeState({ globals: { interactiveLive: true } }).globals.interactiveLive, true);
+});
+
+test('legacy Live layout groups migrate to individual buttons', () => {
+  const legacy = {
+    root: { type: 'row', items: [
+      { type: 'item', kind: 'scenes' },
+      { type: 'item', kind: 'stomps' },
+      { type: 'item', kind: 'tap' },
+      { type: 'item', kind: 'expressions' },
+    ] },
+    hideSidebar: false,
+  };
+  const state = normalizeState({ globals: { liveLayout: legacy } });
+  const kinds = [];
+  const walk = (node) => node?.items ? node.items.forEach(walk) : kinds.push(node?.kind);
+  walk(state.globals.liveLayout.root);
+  assert.ok(kinds.includes('scene'));
+  assert.ok(kinds.includes('stomp'));
+  assert.ok(kinds.includes('expression'));
+  assert.ok(kinds.includes('tap'));
+  assert.ok(!kinds.includes('scenes'));
+});
+
+test('live layout is a stored tree with a sidebar preference', () => {
+  const g = createDefaultState().globals;
+  assert.equal(g.liveLayout.root.type, 'column');
+  assert.equal(g.liveLayout.hideSidebar, false);
+  const layout = { root: { type: 'row', items: [{ type: 'item', kind: 'scenes' }] }, hideSidebar: true };
+  assert.deepEqual(setLiveLayout(createDefaultState(), layout).globals.liveLayout, layout);
 });
 
 test('tempo sync is an opt-in per-block per-preset setting', () => {

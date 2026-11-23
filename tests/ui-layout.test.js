@@ -12,7 +12,7 @@ test('the top bar has a settings popup and mode buttons', () => {
   assert.match(html, /aria-controls="topbar-menu"/);
   assert.match(html, /id="topbar-menu" class="settings-modal"/);
   assert.match(html, /id="settings-close"/);
-  assert.match(html, /data-mode="editor"/);
+  assert.match(html, /id="panel-toggle"/);
   assert.match(html, /id="settings-toggle"/);
   assert.match(html, /id="connect"/);
   assert.match(html, /id="top-status"/);
@@ -22,6 +22,8 @@ test('the top bar has a settings popup and mode buttons', () => {
   assert.match(css, /\.settings-modal \.modal-box \{ width: min\(920px, 94vw\); height: min\(720px, 88vh\);/);
   assert.match(css, /\.settings-panel \{[^}]*flex: 1; overflow-y: auto; min-height: 0;/);
   assert.match(css, /body\.start-mode \.tempo \{ display: none; \}/);
+  assert.match(css, /\.live-column \{ display: grid;/);
+  assert.doesNotMatch(css, /\.live-column > \* \{ flex: 1 1 0/);
   assert.match(css, /\.settings-footer \{ flex: none;/);
   assert.match(css, /body\.start-mode #sidebar \{ display: none; \}/);
   assert.match(css, /body\.start-mode:not\(\.connected\) #mode-switch \{ display: none; \}/);
@@ -36,4 +38,9 @@ test('settings has connection, devices and globals tabs', () => {
 test('start port rows constrain long device names', () => {
   assert.match(startSource, /class="port-row"/);
   assert.match(css, /\.port-id b \{[^}]*text-overflow: ellipsis/);
+});
+
+test('the live layout editor is large and mirrors row/column structure', () => {
+  assert.match(css, /\.layout-modal-box \{ width: min\(1100px/);
+  assert.match(css, /\.layout-slots\.column \{/);
 });

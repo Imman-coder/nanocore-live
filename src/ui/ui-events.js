@@ -2,6 +2,7 @@ import { renderSettings } from './settings.js';
 
 // Global click delegation shared by both views.
 const $ = (sel) => document.querySelector(sel);
+let suppressPanelClick = false;
 
 document.addEventListener('click', (event) => {
   const ctx = window.__nanocoreCtx;
@@ -28,6 +29,12 @@ document.addEventListener('click', (event) => {
   const insideSettings = path.some((node) => node === menu || node?.id === 'topbar-menu' || node?.id === 'settings-toggle');
   if (menu && !menu.hidden && !insideSettings) closeMenu();
   if (!target) return;
+
+  if (target?.id === 'panel-toggle') {
+    if (suppressPanelClick) { suppressPanelClick = false; return; }
+    return ctx.setMode(ctx.state.mode === 'live' ? 'editor' : 'live');
+  }
+  if (target?.dataset.action === 'edit-live-layout') return ctx.openLiveLayout();
 
   const mode = target.dataset.mode;
   if (mode) return ctx.setMode(mode);
@@ -90,6 +97,29 @@ document.addEventListener('keydown', (event) => {
   menu.hidden = true;
   const toggle = document.querySelector('#settings-toggle');
   if (toggle) { toggle.setAttribute('aria-expanded', 'false'); toggle.textContent = '⚙'; }
+});
+
+let panelPress = null;
+document.addEventListener('pointerdown', (event) => {
+  if (!event.target.closest?.('#panel-toggle')) return;
+  const ctx = window.__nanocoreCtx;
+  if (!ctx || ctx.state.mode !== 'live') return;
+  panelPress = setTimeout(() => {
+    suppressPanelClick = true;
+    panelPress = null;
+    ctx.openLiveLayout();
+  }, 600);
+});
+['pointerup', 'pointerleave', 'pointercancel'].forEach((type) => document.addEventListener(type, () => {
+  if (panelPress) clearTimeout(panelPress);
+  panelPress = null;
+}));
+document.addEventListener('contextmenu', (event) => {
+  if (!event.target.closest?.('#panel-toggle')) return;
+  const ctx = window.__nanocoreCtx;
+  if (!ctx || ctx.state.mode !== 'live') return;
+  event.preventDefault();
+  ctx.openLiveLayout();
 });
 
 document.addEventListener('change', (event) => {

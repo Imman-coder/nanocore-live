@@ -3,7 +3,7 @@ import { BLOCK_BY_ID, BLOCKS, FX2_SPECIAL_TYPES, SNAPSHOT_BLOCKS } from '../core
 import {
   loadState, saveState, createDefaultState, setActivePreset, updatePreset,
   upsertStomp, assignmentsFor, effectiveStompLabel, setScene, setSceneEnabled,
-  setBlockStomp, setParamPedal, pedalOwner, setExpressionTrigger, USER_SCENE_KEYS, renameScene, setSceneBlock, setBase, setTempoSync,
+  setBlockStomp, setParamPedal, pedalOwner, setExpressionTrigger, USER_SCENE_KEYS, renameScene, setSceneBlock, setBase, setTempoSync, setLiveLayout,
 } from '../core/store.js';
 import { createRouter, describeTrigger } from '../core/router.js';
 import { createMidiScheduler } from '../core/scheduler.js';
@@ -17,6 +17,7 @@ import { connectionHint } from '../core/capabilities.js';
 import { tapBpm, delayMs, normalizedForMs, SUBDIVISIONS } from '../core/tempo.js';
 import { buildParameterWrite } from '../core/parameterWrite.js';
 import { renderStart } from './start.js';
+import { openLiveLayout } from './live-layout.js';
 import { renderSettings, openSettingsTab } from './settings.js';
 import { createWebMidiTransport } from '../transports/webmidi.js';
 import { createWebBluetoothTransport } from '../transports/webbluetooth.js';
@@ -709,6 +710,8 @@ const ctx = {
     update(setTempoSync(state, state.activePreset, blockId, patch));
     syncDelays();
   },
+  setLiveLayout(layout) { update(setLiveLayout(state, layout)); },
+  openLiveLayout() { openLiveLayout(ctx); },
   setSceneBlock(blockId, participates) {
     update(setSceneBlock(state, state.activePreset, blockId, participates));
     notify(`${BLOCK_BY_ID[blockId]?.name ?? blockId} ${participates ? 'now participates in scenes' : 'excluded from scenes — saved values kept'}`);
@@ -849,9 +852,32 @@ function updateCapabilityHint() {
 updateCapabilityHint();
 updateTempoUI();
 
+function fitTopbar() {
+  document.body.classList.remove('hide-tap', 'hide-brand');
+  requestAnimationFrame(() => {
+    const bar = $('#topbar');
+    if (!bar) return;
+    const visible = [...bar.children].filter((el) => getComputedStyle(el).display !== 'none');
+    const tops = visible.map((el) => el.getBoundingClientRect().top);
+    const wrapped = () => {
+      const now = visible.filter((el) => getComputedStyle(el).display !== 'none').map((el) => el.getBoundingClientRect().top);
+      return now.length > 1 && Math.max(...now) - Math.min(...now) > 4;
+    };
+    if (tops.length > 1 && Math.max(...tops) - Math.min(...tops) > 4) {
+      document.body.classList.add('hide-tap');
+      if (wrapped()) document.body.classList.add('hide-brand');
+    }
+  });
+}
+window.addEventListener('resize', fitTopbar);
+
 function render() {
   document.body.classList.toggle('start-mode', state.mode === 'start');
+  document.body.classList.toggle('live-hide-sidebar', state.mode === 'live' && Boolean(state.globals.liveLayout?.hideSidebar));
+  const panelToggle = $('#panel-toggle');
+  if (panelToggle) panelToggle.textContent = state.mode === 'live' ? 'Editor' : 'Live';
   updateTempoUI();
+  fitTopbar();
   for (const button of document.querySelectorAll('#mode-switch button')) {
     button.classList.toggle('active', button.dataset.mode === state.mode);
   }
@@ -886,6 +912,7 @@ function render() {
     ${presets || '<p class="muted small">No preset bindings yet.</p>'}
     <p class="muted small">Names come from the pedal. MIDI bindings stay in this browser.</p>`;
   $('#content').innerHTML = renderEditor(ctx);
+  fitTopbar();
 }
 
 render();
