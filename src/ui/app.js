@@ -3,7 +3,7 @@ import { BLOCK_BY_ID, BLOCKS, FX2_SPECIAL_TYPES, SNAPSHOT_BLOCKS } from '../core
 import {
   loadState, saveState, createDefaultState, setActivePreset, updatePreset,
   upsertStomp, assignmentsFor, effectiveStompLabel, setScene, setSceneEnabled,
-  setBlockStomp, setParamPedal, pedalOwner, setExpressionTrigger, USER_SCENE_KEYS, renameScene, setSceneBlock, setBase,
+  setBlockStomp, setParamPedal, pedalOwner, setExpressionTrigger, USER_SCENE_KEYS, renameScene, setSceneBlock, setBase, setTempoSync,
 } from '../core/store.js';
 import { createRouter, describeTrigger } from '../core/router.js';
 import { createMidiScheduler } from '../core/scheduler.js';
@@ -88,19 +88,23 @@ function updateTempoUI() {
 
 function syncDelays() {
   const tempo = state.globals.tempo;
-  if (!snapshot || !state.globals.tempoSync || !tempo?.bpm) return;
-  const ms = delayMs(tempo.bpm, tempo.signature, tempo.subdivision);
-  const block = snapshot.blocks.find((b) => b.id === 'del');
-  if (!block) return;
-  const type = typesFor('del', resolveFirmware(state)).find((t) => t.id === block.variant);
-  const offset = BLOCK_BY_ID.del.commonParams?.length ?? 0;
+  if (!snapshot || !state.globals.tempoSync || !tempo?.bpm) return 0;
+  const sync = assignmentsFor(state, state.activePreset).tempoSync ?? {};
   let changes = 0;
-  for (const [index, param] of (type?.params ?? []).entries()) {
-    if (param.label !== 'Time' && param.label !== 'Delay') continue;
-    ctx.setParameter('del', offset + index, normalizedForMs(ms, param.min, param.max));
-    changes++;
+  for (const block of snapshot.blocks) {
+    const config = sync[block.id];
+    if (!config?.enabled) continue;
+    const ms = delayMs(tempo.bpm, tempo.signature, config.subdivision ?? '1/8');
+    const type = typesFor(block.id, resolveFirmware(state)).find((t) => (t.variant ?? t.id) === block.variant);
+    const offset = BLOCK_BY_ID[block.id]?.commonParams?.length ?? 0;
+    for (const [index, param] of (type?.params ?? []).entries()) {
+      if (param.label !== 'Time' && param.label !== 'Delay') continue;
+      ctx.setParameter(block.id, offset + index, normalizedForMs(ms, param.min, param.max));
+      changes++;
+    }
   }
-  notify(changes ? `Delay synced to ${ms} ms · ${tempo.bpm} BPM` : 'No writable delay time on this effect');
+  if (changes) notify(`${changes} delay time(s) synced · ${tempo.bpm} BPM · ${tempo.signature}`);
+  return changes;
 }
 
 function setStatus(text, online = false) {
@@ -693,6 +697,18 @@ const ctx = {
     notify(`${name === 'base' ? 'Base' : `Scene ${name.slice(-1)}`} recalled · ${changes} parameters changed`);
   },
   sceneBlockEnabled(blockId) { return sceneBlockParticipates(currentAssignments(), blockId); },
+  tempoSyncFor(blockId) {
+    return currentAssignments().tempoSync?.[blockId] ?? { enabled: false, subdivision: '1/8' };
+  },
+  tempoSubdivisionMs(blockId) {
+    const config = ctx.tempoSyncFor(blockId);
+    const tempo = state.globals.tempo ?? { bpm: 120, signature: '4/4' };
+    return delayMs(tempo.bpm ?? 120, tempo.signature ?? '4/4', config.subdivision ?? '1/8');
+  },
+  setTempoSync(blockId, patch) {
+    update(setTempoSync(state, state.activePreset, blockId, patch));
+    syncDelays();
+  },
   setSceneBlock(blockId, participates) {
     update(setSceneBlock(state, state.activePreset, blockId, participates));
     notify(`${BLOCK_BY_ID[blockId]?.name ?? blockId} ${participates ? 'now participates in scenes' : 'excluded from scenes — saved values kept'}`);

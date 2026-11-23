@@ -67,9 +67,6 @@ function body(ctx) {
       <span class="muted small">Let the Live expression meters be dragged or arrow-keyed to control assigned parameters.</span></div>
     <h3>Tempo</h3>
     <div class="field"><label><input type="checkbox" data-global="tempo-sync" ${g.tempoSync !== false ? 'checked' : ''}> Sync delay time to tap tempo</label></div>
-    <div class="field"><label>Delay subdivision</label><select data-global="tempo-subdivision">
-      ${['1/4','1/8','1/8d','1/16'].map((id) => `<option value="${id}" ${(g.tempo?.subdivision ?? '1/8') === id ? 'selected' : ''}>${({ '1/4': 'Quarter', '1/8': 'Eighth', '1/8d': 'Dotted eighth', '1/16': 'Sixteenth' })[id]}</option>`).join('')}
-    </select></div>
     <div class="field">
       <label>Tap tempo trigger</label>
       <select data-tap="type">
@@ -165,7 +162,6 @@ function collect() {
   }
   globals.interactiveLive = Boolean(root.querySelector('[data-global="interactive-live"]')?.checked);
   globals.tempoSync = Boolean(root.querySelector('[data-global="tempo-sync"]')?.checked);
-  globals.tempo = { ...(globals.tempo ?? {}), subdivision: root.querySelector('[data-global="tempo-subdivision"]')?.value ?? globals.tempo?.subdivision };
   globals.sceneCount = Number(root.querySelector('[data-global="scene-count"]')?.value ?? globals.sceneCount);
   globals.firmware = root.querySelector('[data-global="firmware"]')?.value ?? globals.firmware;
   globals.midiChannel = Number(root.querySelector('[data-global="midi-channel"]')?.value ?? globals.midiChannel);

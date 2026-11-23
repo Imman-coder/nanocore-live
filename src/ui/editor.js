@@ -7,6 +7,7 @@ import { openPedalPopup } from './pedal-popup.js';
 import { renderKnob } from './knob.js';
 import { typesFor, extraCommonParams } from '../core/versions.js';
 import { sceneStored } from '../core/live.js';
+import { SUBDIVISIONS } from '../core/tempo.js';
 
 let currentCtx = null;
 
@@ -79,6 +80,9 @@ function detail(ctx, blockId, live) {
       ? `<option value="${live.variant}">Loading names from pedal…</option>`
       : versions.map((t) => `<option value="${t.id}" ${t.id === live.variant ? 'selected' : ''}>${escapeHtml(t.name)}</option>`).join('');
   const params = [...block.commonParams, ...extraCommonParams(blockId, ctx.firmware), ...(type?.params ?? [])];
+  const timeParams = params.some((p) => p.label === 'Time' || p.label === 'Delay');
+  const sync = ctx.tempoSyncFor(blockId);
+  const tempoSynced = timeParams && sync.enabled;
   const stomp = ctx.assignments.blockStomps[blockId];
   const fsId = typeof stomp === 'string' ? stomp : stomp?.fs;
   const warning = block.warning ?? type?.warning;
@@ -94,6 +98,17 @@ function detail(ctx, blockId, live) {
       <label class="switch"><input type="checkbox" data-edit="scene-participate" data-block="${blockId}" ${sceneOn ? 'checked' : ''}><span class="slider"></span> Participate in scenes</label>
       <span class="muted small">Off hides the scenes here and leaves this block out of scene saves and recalls; previously saved values are kept.</span>
     </div>
+    ${timeParams ? `<div class="field">
+      <label class="switch"><input type="checkbox" data-edit="tempo-sync" data-block="${blockId}" ${sync.enabled ? 'checked' : ''}><span class="slider"></span> Sync with tempo</label>
+      <span class="muted small">Replaces the time knob with a note subdivision. ${ctx.state.globals.tempo?.bpm ? '' : 'Tap a tempo in the top bar first.'}</span>
+    </div>` : ''}
+    ${tempoSynced ? `<div class="field">
+      <label>Delay subdivision</label>
+      <select data-tempo-subdivision="${blockId}">
+        ${SUBDIVISIONS.map((s) => `<option value="${s.id}" ${s.id === sync.subdivision ? 'selected' : ''}>${s.label} (${s.id})</option>`).join('')}
+      </select>
+      <span class="muted small">${ctx.tempoSubdivisionMs(blockId)} ms · ${ctx.state.globals.tempo?.bpm ?? '—'} BPM · ${ctx.state.globals.tempo?.signature ?? '4/4'}</span>
+    </div>` : ''}
     <h3>Expression mapping <span class="muted small">— assign by right-clicking a knob</span></h3>
     <div class="expr-map-row">
       ${(ctx.state.globals.expressionPedals ?? []).map((pedal) => {
@@ -137,7 +152,7 @@ function detail(ctx, blockId, live) {
     </div>` : '<p class="muted small">Scenes are hidden for this block. Switch “Participate in scenes” back on to resume — saved values are not discarded.</p>'}
     <h3>Parameters <span class="muted small">— right-click a parameter to assign an expression pedal</span></h3>
     <div class="param-list">
-      ${params.map((param, index) => paramRow(ctx, blockId, param, live.params[index], index)).join('')
+      ${params.map((param, index) => (tempoSynced && (param.label === 'Time' || param.label === 'Delay')) ? '' : paramRow(ctx, blockId, param, live.params[index], index)).join('')
         || '<p class="muted small">No MIDI-controllable parameters for this type.</p>'}
     </div>
     ${block.note ? `<p class="muted small">${escapeHtml(block.note)}</p>` : ''}`;
@@ -324,7 +339,9 @@ document.addEventListener('change', (event) => {
   if (!ctx) return;
   if (el.dataset?.editor === 'preset-name') return ctx.updatePreset(ctx.state.activePreset, { name: el.value });
   if (el.dataset?.sceneRename) return ctx.renameScene(el.dataset.sceneRename, el.value);
+  if (el.dataset?.tempoSubdivision) return ctx.setTempoSync(el.dataset.tempoSubdivision, { subdivision: el.value });
   if (!el.dataset?.edit) return;
+  if (el.dataset.edit === 'tempo-sync') return ctx.setTempoSync(el.dataset.block, { enabled: el.checked });
   const channel = ctx.state.globals.midiChannel ?? 1;
   if (el.dataset.edit === 'scene-participate') return ctx.setSceneBlock(el.dataset.block, el.checked);
   if (el.dataset.edit === 'enabled') {

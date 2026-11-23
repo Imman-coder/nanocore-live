@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   createDefaultState, loadState, saveState, exportState, importState,
   setActivePreset, updatePreset, upsertStomp, upsertExpression,
-  setBlockStomp, setParamPedal, pedalOwner, setScene, setSceneEnabled, setSceneBlock, setBase,
+  setBlockStomp, setParamPedal, pedalOwner, setScene, setSceneEnabled, setSceneBlock, setBase, setTempoSync,
   effectiveStompLabel, assignmentsFor, normalizeState, renameScene,
 } from '../src/core/store.js';
 
@@ -148,6 +148,14 @@ test('tempo settings default to a 4/4 eighth-note sync', () => {
 test('interactive live mode is an opt-in global', () => {
   assert.equal(createDefaultState().globals.interactiveLive, false);
   assert.equal(normalizeState({ globals: { interactiveLive: true } }).globals.interactiveLive, true);
+});
+
+test('tempo sync is an opt-in per-block per-preset setting', () => {
+  let state = createDefaultState();
+  assert.deepEqual(assignmentsFor(state, 1).tempoSync, {});
+  state = setTempoSync(state, 1, 'del', { enabled: true, subdivision: '1/16' });
+  assert.deepEqual(assignmentsFor(state, 1).tempoSync.del, { enabled: true, subdivision: '1/16' });
+  assert.equal(assignmentsFor(state, 2).tempoSync.del, undefined);
 });
 
 test('Base scene values are persisted per preset and preset changes return to Base', () => {

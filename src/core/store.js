@@ -28,6 +28,7 @@ export function normalizePreset(preset = {}) {
     sceneNames: Object.fromEntries(USER_SCENE_KEYS.map((key, i) =>
       [key, preset.sceneNames?.[key] || `Scene ${i + 1}`])),
     sceneBlocks: isObject(preset.sceneBlocks) ? { ...preset.sceneBlocks } : {},
+    tempoSync: isObject(preset.tempoSync) ? { ...preset.tempoSync } : {},
     base: {
       values: isObject(preset.base?.values) ? { ...preset.base.values } : {},
       enabled: isObject(preset.base?.enabled) ? { ...preset.base.enabled } : {},
@@ -201,6 +202,7 @@ export function assignmentsFor(state, preset) {
     sceneEnabled: record.sceneEnabled,
     sceneBlocks: record.sceneBlocks,
     base: record.base,
+    tempoSync: record.tempoSync,
   };
 }
 
@@ -250,6 +252,14 @@ export function setSceneEnabled(state, preset, name, enabled) {
   const record = presetRecord(state, preset);
   return updatePreset(state, preset, {
     sceneEnabled: { ...record.sceneEnabled, [name]: { ...(enabled ?? {}) } },
+  });
+}
+
+export function setTempoSync(state, preset, blockId, patch) {
+  const record = presetRecord(state, preset);
+  const current = record.tempoSync[blockId] ?? { enabled: false, subdivision: '1/8' };
+  return updatePreset(state, preset, {
+    tempoSync: { ...record.tempoSync, [blockId]: { ...current, ...patch } },
   });
 }
 
