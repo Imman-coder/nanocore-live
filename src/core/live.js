@@ -4,11 +4,16 @@ import { paramCcFor } from './spec.js';
 
 const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
 
-export function expressionBytes(mapping, channel, variant, value) {
+export function normalizedExpression(mapping, value) {
   const lo = mapping?.inputMin ?? 0;
   const hi = mapping?.inputMax ?? 127;
   let normalized = hi === lo ? 0 : clamp((value - lo) / (hi - lo), 0, 1);
   if (mapping?.invert) normalized = 1 - normalized;
+  return normalized;
+}
+
+export function expressionBytes(mapping, channel, variant, value) {
+  const normalized = normalizedExpression(mapping, value);
   const cc = paramCcFor(
     typeof mapping.target === 'object' ? mapping.target.block : mapping.target,
     mapping.paramIndex ?? 0,

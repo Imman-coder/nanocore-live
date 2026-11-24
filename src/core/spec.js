@@ -80,7 +80,7 @@ export const GLOBAL_CONTROLS = [
 
 export const META = {
   presetSlots: 64,
-  maxPresetSlots: 128,
+  maxPresetSlots: 64,
   midiChannel: 1,
   bankSelectTrap: 'A non-zero CC0/CC32 makes the pedal ignore Program Changes until both return to 0.',
 };

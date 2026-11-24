@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   createDefaultState, loadState, saveState, exportState, importState,
   setActivePreset, updatePreset, upsertStomp, upsertExpression,
-  setBlockStomp, setParamPedal, pedalOwner, setScene, setSceneEnabled, setSceneBlock, setBase, setTempoSync, setLiveLayout,
+  setBlockStomp, setParamPedal, pedalOwner, setScene, setSceneEnabled, setSceneBlock, setBase, setTempoSync, setLiveLayout, setLiveGrid, setPresetName, setPresetNames, markPresetEdited, isPresetEdited,
   effectiveStompLabel, assignmentsFor, normalizeState, renameScene,
 } from '../src/core/store.js';
 
@@ -150,7 +150,7 @@ test('interactive live mode is an opt-in global', () => {
   assert.equal(normalizeState({ globals: { interactiveLive: true } }).globals.interactiveLive, true);
 });
 
-test('legacy Live layout groups migrate to individual buttons', () => {
+test('legacy tree layout migrates to individual grid cells', () => {
   const legacy = {
     root: { type: 'row', items: [
       { type: 'item', kind: 'scenes' },
@@ -160,23 +160,37 @@ test('legacy Live layout groups migrate to individual buttons', () => {
     ] },
     hideSidebar: false,
   };
-  const state = normalizeState({ globals: { liveLayout: legacy } });
-  const kinds = [];
-  const walk = (node) => node?.items ? node.items.forEach(walk) : kinds.push(node?.kind);
-  walk(state.globals.liveLayout.root);
+  const grid = normalizeState({ globals: { liveLayout: legacy } }).globals.liveLayout.grid;
+  const kinds = grid.items.map((item) => item.kind);
   assert.ok(kinds.includes('scene'));
   assert.ok(kinds.includes('stomp'));
   assert.ok(kinds.includes('expression'));
   assert.ok(kinds.includes('tap'));
-  assert.ok(!kinds.includes('scenes'));
+  assert.ok(grid.items.every((item) => item.colSpan >= 1 && item.rowSpan >= 1));
 });
 
-test('live layout is a stored tree with a sidebar preference', () => {
+test('the bottom MIDI message bar can be hidden', () => {
+  assert.equal(createDefaultState().globals.showLogBar, true);
+  assert.equal(normalizeState({ globals: { showLogBar: false } }).globals.showLogBar, false);
+  assert.equal(createDefaultState().globals.hideLivePresetLabel, false);
+  assert.equal(createDefaultState().globals.hideAssignmentsButton, false);
+});
+
+test('expression pedals can opt into a full touch control', () => {
   const g = createDefaultState().globals;
-  assert.equal(g.liveLayout.root.type, 'column');
+  assert.equal(g.expressionPedals[0].fullTouch, false);
+  assert.equal(normalizeState({ globals: { expressionPedals: [{ id: 'E1', name: 'E1', trigger: { type: 'cc', channel: 1, number: 7 } }] } }).globals.expressionPedals[0].fullTouch, false);
+});
+
+test('live layout is a grid with span-aware items', () => {
+  const g = createDefaultState().globals;
+  assert.equal(g.liveLayout.grid.columns, 4);
+  assert.equal(g.liveLayout.grid.rows, 3);
   assert.equal(g.liveLayout.hideSidebar, false);
-  const layout = { root: { type: 'row', items: [{ type: 'item', kind: 'scenes' }] }, hideSidebar: true };
-  assert.deepEqual(setLiveLayout(createDefaultState(), layout).globals.liveLayout, layout);
+  assert.equal(g.liveLayout.fitScreen, false);
+  const state = setLiveGrid(createDefaultState(), { columns: 6, rows: 4 });
+  assert.equal(state.globals.liveLayout.grid.columns, 6);
+  assert.equal(state.globals.liveLayout.grid.rows, 4);
 });
 
 test('tempo sync is an opt-in per-block per-preset setting', () => {
@@ -281,4 +295,29 @@ test('an unassigned stomp label falls back to the global footswitch name', () =>
   assert.equal(effectiveStompLabel(state, assignmentsFor(state, 1), 'FS3'), 'Stomp 3');
   const withLabel = { ...assignmentsFor(state, 1), stomps: [{ fsId: 'FS3', label: 'Solo' }] };
   assert.equal(effectiveStompLabel(state, withLabel, 'FS3'), 'Solo');
+});
+
+test('preset volume expression pedal is a global setting', () => {
+  const base = createDefaultState();
+  assert.equal(base.globals.volumePedal, null);
+  assert.equal(normalizeState({ globals: { volumePedal: 'E2' } }).globals.volumePedal, 'E2');
+});
+
+test('preset edited flag is set only by editor changes', () => {
+  const base = createDefaultState();
+  assert.equal(isPresetEdited(base, 1), false);
+  const edited = markPresetEdited(base, 1);
+  assert.equal(isPresetEdited(edited, 1), true);
+  assert.equal(isPresetEdited(edited, 2), false);
+  const named = setPresetNames(base, new Map([[0, 'Clean']]));
+  assert.equal(isPresetEdited(named, 1), false);
+});
+
+test('pedal preset names are stored as the single browser preset name', () => {
+  const base = createDefaultState();
+  const named = setPresetName(base, 2, 'Lead');
+  assert.equal(assignmentsFor(named, 2).name, 'Lead');
+  const fetched = setPresetNames(base, new Map([[0, 'Clean'], [4, 'Crunch']]));
+  assert.equal(assignmentsFor(fetched, 1).name, 'Clean');
+  assert.equal(assignmentsFor(fetched, 5).name, 'Crunch');
 });

@@ -61,8 +61,17 @@ function body(ctx) {
           <label>Channel</label><input data-global="fs-channel" data-fs="${pedal.id}" type="number" min="1" max="16" value="${pedal.trigger?.channel ?? 1}">
           <label>Number</label><input data-global="fs-number" data-fs="${pedal.id}" type="number" min="0" max="127" value="${pedal.trigger?.number ?? 0}">
           <button class="small" data-global="learn" data-fs="${pedal.id}">Learn</button>
+          <label><input type="checkbox" data-global="fs-full-touch" data-fs="${pedal.id}" ${pedal.fullTouch ? 'checked' : ''}> Full touch control in Live</label>
         </div>
       </div>`).join('')}
+    <div class="field">
+      <label>Preset volume pedal</label>
+      <select data-global="volume-pedal">
+        <option value="" ${g.volumePedal ? '' : 'selected'}>None</option>
+        ${(g.expressionPedals ?? []).map((pedal) => `<option value="${pedal.id}" ${g.volumePedal === pedal.id ? 'selected' : ''}>${escapeHtml(pedal.name)}</option>`).join('')}
+      </select>
+      <span class="muted small">This pedal controls preset volume globally, in every preset.</span>
+    </div>
     <div class="field"><label><input type="checkbox" data-global="interactive-live" ${g.interactiveLive ? 'checked' : ''}> Interactive Live mode</label>
       <span class="muted small">Let the Live expression meters be dragged or arrow-keyed to control assigned parameters.</span></div>
     <h3>Tempo</h3>
@@ -142,6 +151,7 @@ function collect() {
     if (input.dataset.global === 'fs-type') target.trigger = { ...target.trigger, type: input.value };
     if (input.dataset.global === 'fs-channel') target.trigger = { ...target.trigger, channel: Number(input.value) };
     if (input.dataset.global === 'fs-number') target.trigger = { ...target.trigger, number: Number(input.value) };
+    if (input.dataset.global === 'fs-full-touch') target.fullTouch = input.checked;
   }
   for (const input of root.querySelectorAll('[data-scene-id]')) {
     const sw = globals.sceneSwitches?.find((s) => s.id === input.dataset.sceneId);
@@ -160,6 +170,7 @@ function collect() {
       if (input.dataset.tap === 'number') globals.tapTempoSwitch.trigger = { ...globals.tapTempoSwitch.trigger, number: Number(input.value) };
     }
   }
+  globals.volumePedal = root.querySelector('[data-global="volume-pedal"]')?.value || null;
   globals.interactiveLive = Boolean(root.querySelector('[data-global="interactive-live"]')?.checked);
   globals.tempoSync = Boolean(root.querySelector('[data-global="tempo-sync"]')?.checked);
   globals.sceneCount = Number(root.querySelector('[data-global="scene-count"]')?.value ?? globals.sceneCount);

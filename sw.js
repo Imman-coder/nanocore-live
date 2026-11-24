@@ -1,5 +1,5 @@
 // Offline app shell for the installable web app. Never caches MIDI traffic.
-const CACHE = 'nanocore-live-v24';
+const CACHE = 'nanocore-live-v49';
 const SHELL = [
   '/',
   '/index.html',

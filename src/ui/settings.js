@@ -24,6 +24,12 @@ function connectionPanel(ctx) {
         <option value="webbluetooth" ${ctx.state.globals.transportKind === 'webbluetooth' ? 'selected' : ''}>Direct Bluetooth (Web Bluetooth)</option>
       </select>
     </div>
+    <label class="field"><input type="checkbox" onchange="window.__nanocoreCtx.setGlobalSetting('showLogBar', this.checked)" ${ctx.state.globals.showLogBar !== false ? 'checked' : ''}> Show bottom MIDI message bar</label>
+    <label class="field"><input type="checkbox" onchange="window.__nanocoreCtx.setGlobalSetting('hideAssignmentsButton', this.checked)" ${ctx.state.globals.hideAssignmentsButton ? 'checked' : ''}> Hide "Show parameter assignments" button</label>
+    <label class="field"><input type="checkbox" onchange="window.__nanocoreCtx.setGlobalSetting('hideLivePresetLabel', this.checked)" ${ctx.state.globals.hideLivePresetLabel ? 'checked' : ''}> Hide "Live — NANOCORE preset" label</label>
+    <label class="field"><input type="checkbox" onchange="window.__nanocoreCtx.setLiveLayoutOption('hideSidebar', this.checked)" ${ctx.state.globals.liveLayout?.hideSidebar ? 'checked' : ''}> Hide Live left sidebar</label>
+    <label class="field"><input type="checkbox" onchange="window.__nanocoreCtx.setLiveLayoutOption('fitScreen', this.checked)" ${ctx.state.globals.liveLayout?.fitScreen ? 'checked' : ''}> Fit Live board to screen (no scrolling)</label>
+    <button data-action="edit-live-layout">Edit Live layout</button>
     <p class="muted small" id="capability-hint">${ctx.connectionHint()}</p>
     <p class="muted small">Last device reply: ${ctx.lastReply ?? 'none'}</p>`;
 }

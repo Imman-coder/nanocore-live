@@ -3,7 +3,7 @@ import { BLOCK_BY_ID, BLOCKS, FX2_SPECIAL_TYPES, SNAPSHOT_BLOCKS } from '../core
 import {
   loadState, saveState, createDefaultState, setActivePreset, updatePreset,
   upsertStomp, assignmentsFor, effectiveStompLabel, setScene, setSceneEnabled,
-  setBlockStomp, setParamPedal, pedalOwner, setExpressionTrigger, USER_SCENE_KEYS, renameScene, setSceneBlock, setBase, setTempoSync, setLiveLayout,
+  setBlockStomp, setParamPedal, pedalOwner, setExpressionTrigger, USER_SCENE_KEYS, renameScene, setSceneBlock, setBase, setTempoSync, setLiveLayout, setLiveGrid, setPresetNames, isPresetEdited, markPresetEdited,
 } from '../core/store.js';
 import { createRouter, describeTrigger } from '../core/router.js';
 import { createMidiScheduler } from '../core/scheduler.js';
@@ -17,7 +17,7 @@ import { connectionHint } from '../core/capabilities.js';
 import { tapBpm, delayMs, normalizedForMs, SUBDIVISIONS } from '../core/tempo.js';
 import { buildParameterWrite } from '../core/parameterWrite.js';
 import { renderStart } from './start.js';
-import { openLiveLayout } from './live-layout.js';
+import { refreshLiveOrientation, fitLiveBoard } from './live.js';
 import { renderSettings, openSettingsTab } from './settings.js';
 import { createWebMidiTransport } from '../transports/webmidi.js';
 import { createWebBluetoothTransport } from '../transports/webbluetooth.js';
@@ -51,7 +51,7 @@ const liveToggles = new Map();
 const MIDI_GAP_MS = 0; // CCs are sent immediately; the pedal handles them best that way.
 // SysEx frames are longer, so keep a short settle window rather than a long queue.
 const SYSEX_GAP_MS = 25;
-const names = { presets: new Map(), amp: null, ir: null };
+const names = { amp: null, ir: null };
 const logLines = [];
 const catalogState = { busy: false, message: '', presets: 0, amp: 0, ir: 0 };
 let tempoTaps = [];
@@ -245,6 +245,32 @@ function handleDeviceMessage(message) {
   }
 }
 
+function paintExpressionFeedback(pedalId, value) {
+  const meter = document.querySelector(`[data-expression-meter="${pedalId}"]`);
+  const label = document.getElementById(`expr-value-${pedalId}`);
+  const percent = Math.round((value / 127) * 100);
+  const vertical = meter?.dataset.orientation === 'vertical';
+  const axis = vertical ? 'height' : 'width';
+  const fill = document.getElementById(`expr-meter-${pedalId}`);
+  if (fill) {
+    fill.style.width = vertical ? '100%' : `${percent}%`;
+    fill.style.height = vertical ? `${percent}%` : '';
+    fill.style[axis] = `${percent}%`;
+  }
+  if (label) label.textContent = `${percent}%`;
+  if (meter) meter.setAttribute('aria-valuenow', String(Math.round(value)));
+}
+
+function applyVolumeFromExpression(raw) {
+  const volume = Math.max(0, Math.min(100, Math.round(Number(raw) || 0)));
+  if (snapshot) snapshot.volume = volume;
+  const slider = $('#preset-volume');
+  if (slider) slider.value = String(volume);
+  const readout = slider?.closest('.preset-volume')?.querySelectorAll('.muted.small')[1];
+  if (readout) readout.textContent = `${volume} / 100`;
+  send(buildRequestSysEx(COMMAND.SET_FIELD, [FIELD.VOLUME, volume]), `expression-volume:${state.globals.volumePedal ?? 'none'}`);
+}
+
 const router = createRouter({
   globals: state.globals,
   getActiveRow: currentAssignments,
@@ -256,10 +282,11 @@ const router = createRouter({
   onEvent: (event) => {
     log(`${event.type}: ${JSON.stringify(event).slice(0, 140)}`);
     if (event.type === 'expression') {
-      const meter = document.getElementById(`expr-meter-${event.expression}`);
-      if (meter) meter.style.width = `${Math.round((event.value / 127) * 100)}%`;
-      const value = document.getElementById(`expr-value-${event.expression}`);
-      if (value) value.textContent = `${Math.round((event.value / 127) * 100)}%`;
+      paintExpressionFeedback(event.expression, event.value);
+    }
+    if (event.type === 'expression-volume') {
+      paintExpressionFeedback(event.expression, Math.round((event.volume / 100) * 127));
+      applyVolumeFromExpression(event.volume);
     }
     if (event.type === 'stomp') {
       ctx.noteEnabled(event.block, event.value === 127);
@@ -278,6 +305,13 @@ function update(patch) {
   state = { ...state, ...patch };
   persist();
   render();
+}
+
+function markEditedNoRender(preset = state.activePreset) {
+  const next = markPresetEdited(state, preset);
+  if (next === state) return;
+  state = next;
+  saveState(window.localStorage, state);
 }
 
 async function readSnapshot() {
@@ -299,13 +333,12 @@ async function readSnapshot() {
 }
 
 function presetLabel(number) {
-  const stored = names.presets.get(Number(number) - 1);
-  return stored || assignmentsFor(state, number).name || `Preset ${number}`;
+  return assignmentsFor(state, number).name || `Preset ${number}`;
 }
 
 async function loadPresetNames() {
   const found = new Map();
-  for (let start = 0; start < 128; start += 6) {
+  for (let start = 0; start < 64; start += 6) {
     try {
       const reply = await sendRequest(CAT.PRESET_CATALOG, [start, 6]);
       const entries = parsePresetCatalog(reply.payload);
@@ -316,7 +349,8 @@ async function loadPresetNames() {
       break;
     }
   }
-  names.presets = found;
+  state = setPresetNames(state, found);
+  saveState(window.localStorage, state);
   catalogState.presets = found.size;
   render();
 }
@@ -444,7 +478,6 @@ function disconnect() {
   transport = null;
   controllerTransport = null;
   setStatus('Disconnected', false);
-  names.presets = new Map();
   names.amp = null;
   names.ir = null;
   catalogState.presets = 0;
@@ -495,7 +528,6 @@ async function connect() {
   try {
     transport?.disconnect();
     if (!reuseScannedWebMidi) controllerTransport?.disconnect();
-    names.presets = new Map();
     names.amp = null;
     names.ir = null;
     if (kind === 'webbluetooth') {
@@ -551,14 +583,14 @@ const ctx = {
     return key === 'base' ? 'Base' : (currentAssignments().sceneNames?.[key] ?? `Scene ${key.slice(-1)}`);
   },
   renameScene(key, label) {
-    update(renameScene(state, state.activePreset, key, label));
+    update(markPresetEdited(renameScene(state, state.activePreset, key, label), state.activePreset));
   },
   assetNames(kind) { return loadAssetNames(kind); },
   refreshAssetNames,
   catalogStatus() {
     return {
       ...catalogState,
-      presets: catalogState.presets || names.presets?.size || 0,
+      presets: catalogState.presets || Object.keys(state.presets ?? {}).filter((key) => state.presets[key]?.name).length || 0,
       amp: catalogState.amp || names.amp?.filter(Boolean).length || 0,
       ir: catalogState.ir || names.ir?.filter(Boolean).length || 0,
     };
@@ -604,17 +636,17 @@ const ctx = {
   },
   syncDelays,
   sendExpression(pedalId, value) {
-    if (!state.globals.interactiveLive) return;
+    if (state.globals.volumePedal === pedalId) {
+      paintExpressionFeedback(pedalId, value);
+      applyVolumeFromExpression(Math.round((value / 127) * 100));
+      return;
+    }
     const mapping = currentAssignments().expressions.find((e) => e.id === pedalId);
     if (!mapping) return notify(`${pedalId} has no parameter assigned in this preset`);
     const variant = snapshot?.blocks.find((b) => b.id === mapping.target)?.variant ?? 0;
     const bytes = expressionBytes(mapping, state.globals.midiChannel ?? 1, variant, value);
-    send(bytes);
-    const meter = document.getElementById(`expr-meter-${pedalId}`);
-    const label = document.getElementById(`expr-value-${pedalId}`);
-    const percent = Math.round((value / 127) * 100);
-    if (meter) meter.style.width = `${percent}%`;
-    if (label) label.textContent = `${percent}%`;
+    send(bytes, `expression:${pedalId}`);
+    paintExpressionFeedback(pedalId, value);
   },
   toggleStomp(fsId) {
     if (!snapshot) return notify('Connect and read the preset first');
@@ -650,10 +682,10 @@ const ctx = {
       enabled[block.id] = Boolean(block.enabled);
     }
     if (name === 'base') {
-      update({ ...setBase(state, state.activePreset, values, enabled), activeScene: 'base' });
+      update({ ...markPresetEdited(setBase(state, state.activePreset, values, enabled), state.activePreset), activeScene: 'base' });
       return notify(`Base stored in this browser · ${Object.keys(enabled).length} fx states`);
     }
-    let next = setScene(state, state.activePreset, name, values);
+    let next = markPresetEdited(setScene(state, state.activePreset, name, values), state.activePreset);
     next = setSceneEnabled(next, state.activePreset, name, enabled);
     update(next);
     notify(`${name === 'base' ? 'Base' : `Scene ${name.slice(-1)}`} stored · ${Object.keys(enabled).length} fx states${skipped ? ` · ${skipped} block(s) skipped` : ''}`);
@@ -707,13 +739,86 @@ const ctx = {
     return delayMs(tempo.bpm ?? 120, tempo.signature ?? '4/4', config.subdivision ?? '1/8');
   },
   setTempoSync(blockId, patch) {
-    update(setTempoSync(state, state.activePreset, blockId, patch));
+    update(markPresetEdited(setTempoSync(state, state.activePreset, blockId, patch), state.activePreset));
     syncDelays();
   },
   setLiveLayout(layout) { update(setLiveLayout(state, layout)); },
-  openLiveLayout() { openLiveLayout(ctx); },
+  setLiveLayoutOption(key, value) {
+    const layout = state.globals.liveLayout;
+    update(setLiveLayout(state, { ...layout, [key]: value }));
+  },
+  setLiveGrid(patch) { update(setLiveGrid(state, patch)); },
+  liveGridItem(id) { return state.globals.liveLayout?.grid?.items?.find((item) => item.id === id); },
+  setLiveGridItem(id, patch) {
+    const grid = state.globals.liveLayout.grid;
+    if (patch.kind === 'empty') {
+      update(setLiveGrid(state, { items: (grid.items ?? []).filter((item) => item.id !== id) }));
+      return;
+    }
+    const items = (grid.items ?? []).map((item) => {
+      if (item.id !== id) return item;
+      const next = { ...item, ...patch };
+      next.col = Math.max(1, Math.min(grid.columns, Number(next.col) || 1));
+      next.row = Math.max(1, Math.min(grid.rows, Number(next.row) || 1));
+      next.colSpan = Math.max(1, Math.min(grid.columns - next.col + 1, Number(next.colSpan) || 1));
+      next.rowSpan = Math.max(1, Math.min(grid.rows - next.row + 1, Number(next.rowSpan) || 1));
+      return next;
+    });
+    update(setLiveGrid(state, { items }));
+  },
+  moveLiveGridItem(id, row, col) {
+    const grid = state.globals.liveLayout.grid;
+    const item = (grid.items ?? []).find((entry) => entry.id === id);
+    if (!item) return;
+    const targetRow = Math.max(1, Math.min(grid.rows, Number(row) || 1));
+    const targetCol = Math.max(1, Math.min(grid.columns, Number(col) || 1));
+    const oldRow = item.row;
+    const oldCol = item.col;
+    const covers = (entry, r, c) => {
+      const er = Number(entry.row) || 1;
+      const ec = Number(entry.col) || 1;
+      return r >= er && r < er + (Number(entry.rowSpan) || 1)
+        && c >= ec && c < ec + (Number(entry.colSpan) || 1);
+    };
+    const occupying = (grid.items ?? []).find((entry) => entry.id !== id && covers(entry, targetRow, targetCol));
+    const items = (grid.items ?? []).map((entry) => {
+      if (entry.id === id) {
+        const colSpan = Math.min(Number(entry.colSpan) || 1, grid.columns - targetCol + 1);
+        const rowSpan = Math.min(Number(entry.rowSpan) || 1, grid.rows - targetRow + 1);
+        return { ...entry, row: targetRow, col: targetCol, colSpan, rowSpan };
+      }
+      if (occupying && entry.id === occupying.id) {
+        return { ...entry, row: oldRow, col: oldCol };
+      }
+      return entry;
+    });
+    update(setLiveGrid(state, { items }));
+    notify(`Moved ${item.kind} tile to row ${targetRow}, column ${targetCol}`);
+  },
+  setLiveGridCell(cell, value) {
+    const [row, col] = cell.split(':').map(Number);
+    const grid = state.globals.liveLayout.grid;
+    const covers = (item) => {
+      const r = Number(item.row) || 1;
+      const c = Number(item.col) || 1;
+      return row >= r && row < r + (Number(item.rowSpan) || 1)
+        && col >= c && col < c + (Number(item.colSpan) || 1);
+    };
+    const items = (grid.items ?? []).filter((item) => !covers(item));
+    if (value !== 'empty') {
+      const [kind, ref] = value.includes(':') ? value.split(':') : [value, undefined];
+      items.push({
+        id: `cell-${Date.now().toString(36)}`, kind, ...(ref !== undefined ? { ref } : {}),
+        col, row, colSpan: 1, rowSpan: 1,
+      });
+    }
+    update(setLiveGrid(state, { items }));
+  },
+  toggleLiveEdit() { update({ liveEditing: !state.liveEditing }); },
+  startLiveEdit() { update({ mode: 'live', liveEditing: true }); },
+  openLiveLayout() { ctx.startLiveEdit(); },
   setSceneBlock(blockId, participates) {
-    update(setSceneBlock(state, state.activePreset, blockId, participates));
+    update(markPresetEdited(setSceneBlock(state, state.activePreset, blockId, participates), state.activePreset));
     notify(`${BLOCK_BY_ID[blockId]?.name ?? blockId} ${participates ? 'now participates in scenes' : 'excluded from scenes — saved values kept'}`);
   },
   setVolume(value) {
@@ -766,6 +871,7 @@ const ctx = {
       `sysex-param:${blockId}:${paramIndex}`);
     }
     ctx.noteParameter(blockId, paramIndex, value);
+    markEditedNoRender(state.activePreset);
   },
   setAssetName(kind, slot, name) {
     if (Array.isArray(names[kind]) && names[kind][slot] !== undefined) {
@@ -785,12 +891,14 @@ const ctx = {
   send, sendRequest, readSnapshot, log, notify, render,
   describeTrigger, BLOCK_BY_ID, effectiveStompLabel, router,
   update,
-  updatePreset(preset, patch) { update(updatePreset(state, preset, patch)); },
-  upsertStomp(preset, fsId, patch) { update(upsertStomp(state, preset, fsId, patch)); },
-  setExpressions(preset, expressions) { update(updatePreset(state, preset, { expressions })); },
+  isPresetEdited(preset) { return isPresetEdited(state, preset); },
+  markEdited(preset = state.activePreset) { markEditedNoRender(preset); render(); },
+  updatePreset(preset, patch) { update(markPresetEdited(updatePreset(state, preset, patch), preset)); },
+  upsertStomp(preset, fsId, patch) { update(markPresetEdited(upsertStomp(state, preset, fsId, patch), preset)); },
+  setExpressions(preset, expressions) { update(markPresetEdited(updatePreset(state, preset, { expressions }), preset)); },
   selectBlock(blockId) { update({ selectedBlock: blockId }); },
-  setBlockStomp(preset, block, fsId) { update(setBlockStomp(state, preset, block, fsId)); },
-  setParamPedal(preset, block, paramIndex, config) { update(setParamPedal(state, preset, block, paramIndex, config)); },
+  setBlockStomp(preset, block, fsId) { update(markPresetEdited(setBlockStomp(state, preset, block, fsId), preset)); },
+  setParamPedal(preset, block, paramIndex, config) { update(markPresetEdited(setParamPedal(state, preset, block, paramIndex, config), preset)); },
   pedalOwner(preset, pedalId) { return pedalOwner(state, preset, pedalId); },
   setExpressionTrigger(pedalId, trigger) { update(setExpressionTrigger(state, pedalId, trigger)); },
   toggleBlock(blockId) {
@@ -817,7 +925,6 @@ const ctx = {
     try {
       await sendRequest(COMMAND.SET_FIELD, [FIELD.RENAME, clean.length, ...[...clean].map((c) => c.charCodeAt(0))]);
       await sendRequest(COMMAND.SAVE_PRESET, [Math.max(0, state.activePreset - 1)]);
-      names.presets.set(state.activePreset - 1, clean);
       ctx.updatePreset(state.activePreset, { name: clean });
       render();
       notify(`Preset ${state.activePreset} renamed to "${clean}" on the pedal`);
@@ -869,11 +976,13 @@ function fitTopbar() {
     }
   });
 }
-window.addEventListener('resize', fitTopbar);
+window.addEventListener('resize', () => { fitTopbar(); refreshLiveOrientation(); fitLiveBoard(); });
 
 function render() {
   document.body.classList.toggle('start-mode', state.mode === 'start');
+  document.body.classList.toggle('hide-logbar', state.globals.showLogBar === false);
   document.body.classList.toggle('live-hide-sidebar', state.mode === 'live' && Boolean(state.globals.liveLayout?.hideSidebar));
+  document.body.classList.toggle('live-fit-screen', state.mode === 'live' && Boolean(state.globals.liveLayout?.fitScreen));
   const panelToggle = $('#panel-toggle');
   if (panelToggle) panelToggle.textContent = state.mode === 'live' ? 'Editor' : 'Live';
   updateTempoUI();
@@ -888,9 +997,11 @@ function render() {
   if (state.mode === 'live') {
     $('#sidebar').innerHTML = renderLiveSidebar(ctx);
     $('#content').innerHTML = renderLive(ctx);
+    requestAnimationFrame(refreshLiveOrientation);
     return;
   }
   const presets = Object.keys(state.presets).map(Number).sort((a, b) => a - b)
+    .filter((number) => isPresetEdited(state, number))
     .map((number) => `<div class="row-card ${number === state.activePreset ? 'selected' : ''}"
         data-action="recall-preset" data-preset="${number}">
         <div class="row-title"><b>${escapeHtml(ctx.presetLabel(number))}</b><span class="pill">${number}</span></div>
@@ -908,8 +1019,8 @@ function render() {
         <button data-action="step-preset" data-delta="1" aria-label="Next preset">▶</button>
       </div>
     </div>
-    <h3>Presets</h3>
-    ${presets || '<p class="muted small">No preset bindings yet.</p>'}
+    <h3>Edited presets</h3>
+    ${presets || '<p class="muted small">No presets edited in this editor yet.</p>'}
     <p class="muted small">Names come from the pedal. MIDI bindings stay in this browser.</p>`;
   $('#content').innerHTML = renderEditor(ctx);
   fitTopbar();

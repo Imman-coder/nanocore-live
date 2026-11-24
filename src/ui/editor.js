@@ -165,7 +165,7 @@ export function presetOptions(ctx, selected) {
     33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48,
     49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, selected]);
   return [...numbers].sort((a, b) => a - b).map((n) =>
-    `<option value="${n}" ${n === selected ? 'selected' : ''}>${escapeHtml(ctx.presetLabel(n))}</option>`).join('');
+    `<option value="${n}" ${n === selected ? 'selected' : ''}>${n} · ${escapeHtml(ctx.presetLabel(n))}</option>`).join('');
 }
 
 function escapeHtml(s) {
@@ -327,6 +327,7 @@ document.addEventListener('input', (event) => {
     currentCtx?.send(buildCc(currentCtx.state.globals.midiChannel ?? 1, Number(el.dataset.cc), value));
   }
   const real = Number(el.dataset.min) + (value / 127) * (Number(el.dataset.max) - Number(el.dataset.min));
+  currentCtx?.markEdited();
   const span = Number(el.dataset.max) - Number(el.dataset.min);
   if (span > 0) currentCtx?.noteParameter(el.dataset.block, Number(el.dataset.index), (real - Number(el.dataset.min)) / span);
   const display = el.parentElement?.querySelector('.knob-meta .value');
@@ -347,6 +348,7 @@ document.addEventListener('change', (event) => {
   if (el.dataset.edit === 'enabled') {
     ctx.send(buildCc(channel, BLOCK_BY_ID[el.dataset.block].onOffCc, el.checked ? 127 : 0));
     ctx.noteEnabled(el.dataset.block, el.checked);
+    ctx.markEdited();
     ctx.render();
     setTimeout(ctx.readSnapshot, 250);
   } else if (el.dataset.edit === 'type') {
@@ -356,6 +358,7 @@ document.addEventListener('change', (event) => {
     }
     const block = BLOCK_BY_ID[el.dataset.block];
     const id = Number(el.value);
+    ctx.markEdited();
     if (block.sysexTypeField) {
       // CC43/44 are ineffective on 1.10 and redundant on 1.11; SysEx is the
       // documented path on every version.
@@ -377,6 +380,7 @@ document.addEventListener('change', (event) => {
       ctx.noteParameter(el.dataset.block, Number(el.dataset.index),
         options.length > 1 ? Number(el.value) / (options.length - 1) : 0);
     }
+    ctx.markEdited();
     ctx.render();
   }
 });

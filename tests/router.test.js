@@ -49,6 +49,24 @@ test('a configured MIDI trigger taps tempo on a nonzero value', () => {
   assert.equal(taps, 1);
 });
 
+test('the global volume expression pedal emits volume changes', () => {
+  const events = [];
+  const router = createRouter({
+    globals: {
+      ...globals,
+      volumePedal: 'E1',
+      expressionPedals: [{ id: 'E1', trigger: { type: 'cc', channel: 1, number: 11 } }],
+    },
+    getActiveRow: () => ({ expressions: [] }),
+    send: () => {},
+    onEvent: (event) => events.push(event),
+  });
+  router.handleMidi({ port: 'GT-10', bytes: [0xb0, 11, 63] });
+  assert.deepEqual(events.filter((event) => event.type === 'expression-volume'), [
+    { at: events.at(-1).at, type: 'expression-volume', expression: 'E1', volume: 50 },
+  ]);
+});
+
 test('a footswitch value of 0 turns off every block assigned to it', () => {
   const { router, sent } = setup();
   router.handleMidi({ port: 'GT-10', bytes: [0xb0, 6, 0] });

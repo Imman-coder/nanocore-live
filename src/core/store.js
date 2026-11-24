@@ -15,26 +15,56 @@ const defaultSceneSwitches = (count) => Array.from({ length: count }, (_, i) => 
 }));
 
 const defaultPedals = () => [7, 11, 1, 4].map((number, i) => ({
-  id: `E${i + 1}`, name: `Expression ${i + 1}`, trigger: { type: 'cc', channel: 1, number },
+  id: `E${i + 1}`, name: `Expression ${i + 1}`, trigger: { type: 'cc', channel: 1, number }, fullTouch: false,
 }));
 
-function expandLiveLayout(node, globals) {
-  if (!node) return node;
-  if (node.items) return { ...node, items: node.items.map((child) => expandLiveLayout(child, globals)) };
-  if (node.type !== 'item') return node;
-  if (node.kind === 'tap') return node;
-  const group = {
+function flattenLiveLayout(node, out, globals) {
+  if (!node) return;
+  if (node.items) { node.items.forEach((child) => flattenLiveLayout(child, out, globals)); return; }
+  if (node.type !== 'item') return;
+  const groups = {
     scenes: { kind: 'scene', ids: ['base', ...USER_SCENE_KEYS.slice(0, Math.max(0, (globals.sceneCount ?? 3) - 1))] },
     stomps: { kind: 'stomp', ids: (globals.footswitches ?? []).map((f) => f.id) },
     expressions: { kind: 'expression', ids: (globals.expressionPedals ?? []).map((p) => p.id) },
-  }[node.kind];
-  if (!group) return node;
-  return { type: 'row', items: group.ids.map((id) => ({ type: 'item', kind: group.kind, id })) };
+  };
+  const group = groups[node.kind];
+  if (group) group.ids.forEach((ref) => out.push({ kind: group.kind, ref }));
+  else if (node.kind === 'tap') out.push({ kind: 'tap' });
+}
+
+function liveGridLayout(layout, globals) {
+  if (isObject(layout?.grid)) {
+    return {
+      ...layout,
+      grid: {
+        ...layout.grid,
+        items: (layout.grid.items ?? []).map((item, i) => ({
+          id: item.id ?? `g${i + 1}`, colSpan: 1, rowSpan: 1, ...item,
+        })),
+      },
+    };
+  }
+  const flat = [];
+  flattenLiveLayout(layout?.root, flat, globals);
+  const columns = Math.max(1, Math.min(8, flat.length || 4));
+  const rows = Math.max(1, Math.ceil(flat.length / columns));
+  return {
+    ...layout,
+    grid: {
+      columns,
+      rows,
+      items: flat.map((item, i) => ({
+        id: `g${i + 1}`, ...item,
+        col: (i % columns) + 1, row: Math.floor(i / columns) + 1, colSpan: 1, rowSpan: 1,
+      })),
+    },
+  };
 }
 
 export function normalizePreset(preset = {}) {
   return {
     name: preset.name ?? `Preset ${preset.preset ?? 1}`,
+    edited: preset.edited === true,
     stomps: Array.isArray(preset.stomps) ? preset.stomps : [],
     expressions: Array.isArray(preset.expressions) ? preset.expressions : [],
     blockStomps: isObject(preset.blockStomps) ? preset.blockStomps : {},
@@ -100,24 +130,32 @@ export function createDefaultState() {
       expressionPedals: defaultPedals(),
       baseOverride: false,
       transportKind: 'webmidi',
+      showLogBar: true,
+      hideLivePresetLabel: false,
+      hideAssignmentsButton: false,
       interactiveLive: false,
+      volumePedal: null,
       tempoSync: true,
       tempo: { bpm: null, signature: '4/4', subdivision: '1/8' },
       liveLayout: {
-        root: {
-          type: 'column',
+        grid: {
+          columns: 4,
+          rows: 3,
           items: [
-            { type: 'row', items: [
-              { type: 'item', kind: 'scene', id: 'base' },
-              { type: 'item', kind: 'scene', id: 'scene1' },
-              { type: 'item', kind: 'scene', id: 'scene2' },
-              { type: 'item', kind: 'tap' },
-            ] },
-            { type: 'row', items: [1, 2, 3, 4].map((n) => ({ type: 'item', kind: 'stomp', id: `FS${n}` })) },
-            { type: 'row', items: [1, 2, 3, 4].map((n) => ({ type: 'item', kind: 'expression', id: `E${n}` })) },
+            ...['base', 'scene1', 'scene2'].map((id, i) => ({
+              id: `scene-${id}`, kind: 'scene', ref: id, col: i + 1, row: 1, colSpan: 1, rowSpan: 1,
+            })),
+            { id: 'tap', kind: 'tap', col: 4, row: 1, colSpan: 1, rowSpan: 1 },
+            ...[1, 2, 3, 4].map((n) => ({
+              id: `stomp-FS${n}`, kind: 'stomp', ref: `FS${n}`, col: n, row: 2, colSpan: 1, rowSpan: 1,
+            })),
+            ...[1, 2, 3, 4].map((n) => ({
+              id: `expr-E${n}`, kind: 'expression', ref: `E${n}`, col: n, row: 3, colSpan: 1, rowSpan: 1,
+            })),
           ],
         },
         hideSidebar: false,
+        fitScreen: false,
       },
       sceneCount: 3,
       sceneSwitches: defaultSceneSwitches(3),
@@ -129,6 +167,7 @@ export function createDefaultState() {
     activeScene: 'base',
     expandedBlocks: [],
     mode: 'start',
+    liveEditing: false,
     showAdvanced: false,
   };
 }
@@ -145,10 +184,16 @@ export function normalizeState(state) {
   const globals = { ...base.globals, ...(state?.globals ?? {}) };
   if (!Array.isArray(globals.footswitches) || !globals.footswitches.length) globals.footswitches = base.globals.footswitches;
   if (!Array.isArray(globals.expressionPedals) || !globals.expressionPedals.length) globals.expressionPedals = base.globals.expressionPedals;
+  globals.expressionPedals = globals.expressionPedals.map((p) => ({ fullTouch: false, ...p }));
   const sceneCount = Math.max(3, Math.min(6, Number(globals.sceneCount) || 3));
   globals.tapTempoSwitch = globals.tapTempoSwitch ?? base.globals.tapTempoSwitch;
-  if (!isObject(globals.liveLayout?.root)) globals.liveLayout = base.globals.liveLayout;
-  globals.liveLayout = { ...globals.liveLayout, root: expandLiveLayout(globals.liveLayout.root, globals) };
+  globals.showLogBar = typeof globals.showLogBar === 'boolean' ? globals.showLogBar : true;
+  globals.volumePedal = globals.volumePedal ?? null;
+  globals.hideLivePresetLabel = typeof globals.hideLivePresetLabel === 'boolean' ? globals.hideLivePresetLabel : false;
+  globals.hideAssignmentsButton = typeof globals.hideAssignmentsButton === 'boolean' ? globals.hideAssignmentsButton : false;
+  if (!isObject(globals.liveLayout?.grid) && !isObject(globals.liveLayout?.root)) globals.liveLayout = base.globals.liveLayout;
+  globals.liveLayout = liveGridLayout(globals.liveLayout, globals);
+  globals.liveLayout.fitScreen = typeof globals.liveLayout.fitScreen === 'boolean' ? globals.liveLayout.fitScreen : false;
   globals.sceneCount = sceneCount;
   const switches = defaultSceneSwitches(sceneCount);
   const existingSwitches = Array.isArray(globals.sceneSwitches) ? globals.sceneSwitches : [];
@@ -239,8 +284,31 @@ export function assignmentsFor(state, preset) {
 }
 
 export function setActivePreset(state, preset) {
-  const number = Math.max(1, Math.min(128, Number(preset) || 1));
+  const number = Math.max(1, Math.min(64, Number(preset) || 1));
   return { ...state, activePreset: number, selectedBlock: null, activeScene: 'base' };
+}
+
+export function isPresetEdited(state, preset) {
+  return Boolean(state.presets?.[String(preset)]?.edited);
+}
+
+export function markPresetEdited(state, preset) {
+  if (isPresetEdited(state, preset)) return state;
+  return updatePreset(state, preset, { edited: true });
+}
+
+export function setPresetName(state, preset, name) {
+  return updatePreset(state, preset, { name: String(name ?? '').trim() });
+}
+
+export function setPresetNames(state, entries) {
+  let next = state;
+  const list = entries instanceof Map ? [...entries.entries()] : Object.entries(entries ?? {});
+  for (const [slot, name] of list) {
+    const preset = Number(slot) + 1;
+    if (preset >= 1 && preset <= 64 && name) next = setPresetName(next, preset, name);
+  }
+  return next;
 }
 
 export function updatePreset(state, preset, patch) {
@@ -285,6 +353,11 @@ export function setSceneEnabled(state, preset, name, enabled) {
   return updatePreset(state, preset, {
     sceneEnabled: { ...record.sceneEnabled, [name]: { ...(enabled ?? {}) } },
   });
+}
+
+export function setLiveGrid(state, patch) {
+  const layout = state.globals.liveLayout;
+  return setLiveLayout(state, { ...layout, grid: { ...layout.grid, ...patch } });
 }
 
 export function setLiveLayout(state, layout) {

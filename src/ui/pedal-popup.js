@@ -131,6 +131,9 @@ document.addEventListener('click', (event) => {
     case 'save': {
       const pedalId = state.pedal;
       if (!pedalId) return fail('Choose a pedal first.');
+      if (ctx.state.globals.volumePedal === pedalId) {
+        return fail(`${pedalId} controls preset volume globally. Clear it in Globals first.`);
+      }
       const owner = ctx.pedalOwner(preset, pedalId);
       if (owner && owner !== key) {
         return fail(`${pedalId} is already assigned to ${ownerLabel(owner)} in this preset. Unassign it there first.`);

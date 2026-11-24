@@ -34,7 +34,8 @@ document.addEventListener('click', (event) => {
     if (suppressPanelClick) { suppressPanelClick = false; return; }
     return ctx.setMode(ctx.state.mode === 'live' ? 'editor' : 'live');
   }
-  if (target?.dataset.action === 'edit-live-layout') return ctx.openLiveLayout();
+  if (target?.dataset.action === 'toggle-live-edit') return ctx.toggleLiveEdit();
+  if (target?.dataset.action === 'edit-live-layout') { closeMenu(); return ctx.startLiveEdit(); }
 
   const mode = target.dataset.mode;
   if (mode) return ctx.setMode(mode);
@@ -52,7 +53,7 @@ document.addEventListener('click', (event) => {
   if (target.id === 'tap-tempo' || target.dataset.action === 'tap-tempo') return ctx.tapTempo();
 
   const action = target.dataset.action;
-  if (action === 'step-preset') return ctx.recallPreset(Math.max(1, Math.min(128, ctx.state.activePreset + Number(target.dataset.delta))));
+  if (action === 'step-preset') return ctx.recallPreset(Math.max(1, Math.min(64, ctx.state.activePreset + Number(target.dataset.delta))));
   if (action === 'recall-preset') return ctx.recallPreset(Number(target.dataset.preset));
   if (action === 'toggle-advanced') return ctx.update({ showAdvanced: !ctx.state.showAdvanced });
 
@@ -124,7 +125,20 @@ document.addEventListener('contextmenu', (event) => {
 
 document.addEventListener('change', (event) => {
   const ctx = window.__nanocoreCtx;
+  if (event.target.dataset.gridSize && ctx) {
+    const key = event.target.dataset.gridSize;
+    return ctx.setLiveGrid({ [key]: Math.max(1, Math.min(64, Number(event.target.value) || 1)) });
+  }
+  if (event.target.dataset.gridCell && ctx) {
+    return ctx.setLiveGridCell(event.target.dataset.gridCell, event.target.value);
+  }
+  if (event.target.dataset.gridCellItem && ctx) {
+    const value = event.target.value;
+    const [kind, ref] = value.includes(':') ? value.split(':') : [value, undefined];
+    return ctx.setLiveGridItem(event.target.dataset.gridCellItem, { kind, ...(ref !== undefined ? { ref } : {}) });
+  }
   if (event.target.id === 'preset-select' && ctx) return ctx.recallPreset(Number(event.target.value));
+  if (event.target.dataset.presetSelect && ctx) return ctx.recallPreset(Number(event.target.value));
   if (event.target.id === 'preset-volume' && ctx) return ctx.setVolume(Number(event.target.value));
   if (event.target.id === 'time-signature' && ctx) return ctx.setTempo({ signature: event.target.value });
   if (event.target.id === 'transport-kind' && window.__nanocoreCtx?.state) {
