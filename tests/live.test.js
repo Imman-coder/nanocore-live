@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { stompActive, toggleCc, sceneStored, sceneBlockParticipates, expressionBytes } from '../src/core/live.js';
+import { stompActive, toggleCc, sceneStored, sceneBlockParticipates, expressionBytes, expressionRawToPercent, expressionPercentToRaw, normalizedExpression } from '../src/core/live.js';
 import { captureBase, baseForPreset, overrideBase } from '../src/core/base.js';
 import { connectionHint } from '../src/core/capabilities.js';
 
@@ -32,6 +32,27 @@ test('base captures device values and on/off states once per preset', () => {
   assert.deepEqual(fresh.values, base.values);
 });
 
+
+test('expression range percentages convert to and from MIDI values', () => {
+  assert.equal(expressionRawToPercent(0), 0);
+  assert.equal(expressionRawToPercent(127), 100);
+  assert.equal(expressionPercentToRaw(20), 25);
+  assert.equal(expressionPercentToRaw(70), 89);
+});
+
+test('expression input window maps onto a selected parameter window', () => {
+  const mapping = {
+    inputMin: expressionPercentToRaw(5), inputMax: expressionPercentToRaw(95),
+    outputMin: expressionPercentToRaw(30), outputMax: expressionPercentToRaw(80),
+    invert: false,
+  };
+  const at = (percent) => normalizedExpression(mapping, expressionPercentToRaw(percent));
+  assert.ok(Math.abs(at(5) - 0.30) < 0.02);
+  assert.ok(Math.abs(at(95) - 0.80) < 0.02);
+  assert.ok(Math.abs(at(50) - 0.55) < 0.02);
+  const inverted = { ...mapping, invert: true };
+  assert.ok(Math.abs(normalizedExpression(inverted, expressionPercentToRaw(5)) - 0.80) < 0.02);
+});
 
 test('a live expression control maps its value through the assignment window', () => {
   const mapping = { id: 'E1', target: 'fx1', paramIndex: 0, inputMin: 0, inputMax: 127, invert: false };

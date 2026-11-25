@@ -4,12 +4,22 @@ import { paramCcFor } from './spec.js';
 
 const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
 
+export function expressionRawToPercent(raw) {
+  return Math.round((clamp(Number(raw) || 0, 0, 127) / 127) * 100);
+}
+
+export function expressionPercentToRaw(percent) {
+  return Math.round((clamp(Number(percent) || 0, 0, 100) / 100) * 127);
+}
+
 export function normalizedExpression(mapping, value) {
   const lo = mapping?.inputMin ?? 0;
   const hi = mapping?.inputMax ?? 127;
-  let normalized = hi === lo ? 0 : clamp((value - lo) / (hi - lo), 0, 1);
-  if (mapping?.invert) normalized = 1 - normalized;
-  return normalized;
+  let input = hi === lo ? 0 : clamp((value - lo) / (hi - lo), 0, 1);
+  if (mapping?.invert) input = 1 - input;
+  const outLo = clamp((mapping?.outputMin ?? 0) / 127, 0, 1);
+  const outHi = clamp((mapping?.outputMax ?? 127) / 127, 0, 1);
+  return outLo + input * (outHi - outLo);
 }
 
 export function expressionBytes(mapping, channel, variant, value) {

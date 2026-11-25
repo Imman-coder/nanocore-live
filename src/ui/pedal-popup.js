@@ -1,5 +1,6 @@
 // Right-click parameter popup: assign one of four virtual expression pedals.
 import { BLOCK_BY_ID } from '../core/spec.js';
+import { expressionRawToPercent, expressionPercentToRaw } from '../core/live.js';
 
 let state = null;
 
@@ -19,15 +20,17 @@ export function openPedalPopup(ctx, target) {
     target,
     pedal: mapping?.pedal ?? null,
     trigger: null,
-    inputMin: mapping?.inputMin ?? 0,
-    inputMax: mapping?.inputMax ?? 127,
+    minPercent: expressionRawToPercent(mapping?.inputMin ?? 0),
+    maxPercent: expressionRawToPercent(mapping?.inputMax ?? 127),
+    outMinPercent: expressionRawToPercent(mapping?.outputMin ?? 0),
+    outMaxPercent: expressionRawToPercent(mapping?.outputMax ?? 127),
     invert: Boolean(mapping?.invert),
   };
   render();
 }
 
 function render() {
-  const { ctx, target, pedal, trigger, inputMin, inputMax, invert } = state;
+  const { ctx, target, pedal, trigger, minPercent, maxPercent, outMinPercent, outMaxPercent, invert } = state;
   const pedals = ctx.state.globals.expressionPedals;
   const chosen = pedals.find((p) => p.id === pedal);
   const mapping = ctx.assignments.paramPedals[keyOf(target)];
@@ -58,11 +61,13 @@ function render() {
     </div>
     <h3>Value range mapping</h3>
     <div class="field">
-      <label>Pedal min</label><input data-popup="min" type="number" min="0" max="127" value="${inputMin}">
-      <label>Pedal max</label><input data-popup="max" type="number" min="0" max="127" value="${inputMax}">
+      <label>Pedal min (%)</label><input data-popup="min" type="number" min="0" max="100" step="1" value="${minPercent}">
+      <label>Pedal max (%)</label><input data-popup="max" type="number" min="0" max="100" step="1" value="${maxPercent}">
+      <label>Parameter min (%)</label><input data-popup="out-min" type="number" min="0" max="100" step="1" value="${outMinPercent}">
+      <label>Parameter max (%)</label><input data-popup="out-max" type="number" min="0" max="100" step="1" value="${outMaxPercent}">
       <label><input data-popup="invert" type="checkbox" ${invert ? 'checked' : ''}> Invert</label>
     </div>
-    <p class="small muted">The pedal's min/max are mapped onto the whole range of this parameter. Values outside the window are clamped.</p>
+    <p class="small muted">The pedal window and the parameter window are independent. For example, 5–95% of pedal travel can map to only 30–80% of the parameter knob; values outside the pedal window are clamped.</p>
     <p id="popup-error" class="warning" hidden></p>
     <div class="field" style="margin-top:16px">
       <button class="primary" data-popup="save">${mapping ? 'Update assignment' : 'Assign pedal'}</button>
@@ -90,8 +95,10 @@ function fail(message) {
 document.addEventListener('input', (event) => {
   if (!state) return;
   const el = event.target;
-  if (el.dataset.popup === 'min') state.inputMin = Number(el.value);
-  if (el.dataset.popup === 'max') state.inputMax = Number(el.value);
+  if (el.dataset.popup === 'min') state.minPercent = Number(el.value);
+  if (el.dataset.popup === 'max') state.maxPercent = Number(el.value);
+  if (el.dataset.popup === 'out-min') state.outMinPercent = Number(el.value);
+  if (el.dataset.popup === 'out-max') state.outMaxPercent = Number(el.value);
   if (el.dataset.popup === 'invert') state.invert = el.checked;
   if (el.dataset.popupMessage) state.trigger = collectMessage();
 });
@@ -140,12 +147,20 @@ document.addEventListener('click', (event) => {
       }
       const modal = document.querySelector('#modal');
       const message = state.trigger ?? collectMessage();
-      const inputMin = Number(modal.querySelector('[data-popup="min"]').value);
-      const inputMax = Number(modal.querySelector('[data-popup="max"]').value);
+      const minPercent = Number(modal.querySelector('[data-popup="min"]').value);
+      const maxPercent = Number(modal.querySelector('[data-popup="max"]').value);
+      const outMinPercent = Number(modal.querySelector('[data-popup="out-min"]').value);
+      const outMaxPercent = Number(modal.querySelector('[data-popup="out-max"]').value);
+      if (minPercent >= maxPercent) return fail('Pedal min % must be lower than max %.');
+      if (outMinPercent >= outMaxPercent) return fail('Parameter min % must be lower than max %.');
+      const inputMin = expressionPercentToRaw(minPercent);
+      const inputMax = expressionPercentToRaw(maxPercent);
+      const outputMin = expressionPercentToRaw(outMinPercent);
+      const outputMax = expressionPercentToRaw(outMaxPercent);
       const invert = modal.querySelector('[data-popup="invert"]').checked;
       ctx.setExpressionTrigger(pedalId, message);
       ctx.setParamPedal(preset, target.block, target.paramIndex, {
-        pedal: pedalId, inputMin, inputMax, invert,
+        pedal: pedalId, inputMin, inputMax, outputMin, outputMax, invert,
       });
       ctx.notify(`${pedalId} assigned to ${target.label}`);
       state = null;

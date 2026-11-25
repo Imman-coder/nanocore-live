@@ -113,6 +113,15 @@ test('presets are limited to the 64 slots on the pedal', () => {
   assert.match(editor, /\$\{n\} · \$\{escapeHtml\(ctx\.presetLabel\(n\)\)\}/);
 });
 
+test('expression assignment range uses percentages', () => {
+  const popup = readFileSync(new URL('../src/ui/pedal-popup.js', import.meta.url), 'utf8');
+  assert.match(popup, /Pedal min \(%\)/);
+  assert.match(popup, /Pedal max \(%\)/);
+  assert.match(popup, /Parameter min \(%\)/);
+  assert.match(popup, /Parameter max \(%\)/);
+  assert.match(popup, /expressionPercentToRaw\(outMinPercent\)/);
+});
+
 test('Globals can assign an expression pedal to preset volume', () => {
   const globals = readFileSync(new URL('../src/ui/globals.js', import.meta.url), 'utf8');
   const app = readFileSync(new URL('../src/ui/app.js', import.meta.url), 'utf8');

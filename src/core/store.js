@@ -412,6 +412,8 @@ export function upsertExpression(state, preset, expression) {
     pedal: expression.id,
     inputMin: expression.inputMin ?? 0,
     inputMax: expression.inputMax ?? 127,
+    outputMin: expression.outputMin ?? 0,
+    outputMax: expression.outputMax ?? 127,
     invert: Boolean(expression.invert),
   });
 }
