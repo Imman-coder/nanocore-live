@@ -19,20 +19,40 @@ test('effect parameters live in explicit per-version, per-block tables', () => {
   }
   const modified = readFileSync(new URL('../src/data/firmware/modified/1.2.js', import.meta.url), 'utf8');
   assert.match(modified, /import \{ VERSION as ORIGINAL \}/);
-  assert.match(modified, /_REPLACEMENTS\[type\.id\] \?\? type/);
+  assert.match(modified, /patchesFor/);
+  assert.match(modified, /applyPatches/);
+  const patches = readFileSync(new URL('../src/data/firmware/patches.js', import.meta.url), 'utf8');
+  assert.match(patches, /UNIVIBE_BASE/);
+  assert.match(patches, /UNIVIBE_MODERN/);
+  assert.match(patches, /OCTAVE/);
 });
 
-test('every original version has a modified variant that replaces only changed types', () => {
-  for (const version of ['1.10', '1.11', '1.12', '1.2']) {
-    const original = typesFor('fx2', version);
-    const modified = typesFor('fx2', `${version}-modified`);
-    assert.equal(modified.length, original.length, `${version} fx2 type count`);
-    assert.equal(modified.find((type) => type.id === 5).slug, 'pitch', `${version} range becomes octave`);
-    assert.equal(modified.find((type) => type.id === 8).slug, 'octave', `${version} pitch becomes octave`);
-    assert.notDeepEqual(modified.find((type) => type.id === 5).params, original.find((type) => type.id === 5).params);
+test('all six modified variants are original firmware plus the supported patches', () => {
+  const cases = [
+    ['1.10+uv', '1.10', false],
+    ['1.11+uv', '1.11', false],
+    ['1.12+uv', '1.12', false],
+    ['1.12+uv+oct', '1.12', true],
+    ['1.2+uv', '1.2', false],
+    ['1.2+uv+oct', '1.2', true],
+  ];
+  for (const [variant, base, octave] of cases) {
+    const fx2 = typesFor('fx2', variant);
+    const originalFx2 = typesFor('fx2', base);
+    assert.equal(fx2.length, originalFx2.length, `${variant} FX2 type count`);
+    assert.equal(fx2.find((t) => t.id === 5).slug, 'range', `${variant} keeps FX2 Range`);
+    assert.equal(fx2.find((t) => t.id === 8).slug, octave ? 'octave' : 'pitch', `${variant} FX2 id 8`);
+    const mod = typesFor('mod', variant);
+    assert.ok(mod.some((t) => t.slug === 'univibe'), `${variant} has UniVibe`);
+    assert.equal(mod.some((t) => t.slug === 'velvet_vibrato'), false, `${variant} removes Velvet Vibrato`);
   }
-  assert.equal(typesFor('mod', '1.10-modified').some((type) => type.slug === 'univibe'), false);
-  assert.equal(typesFor('mod', '1.2-modified').some((type) => type.slug === 'univibe'), true);
+});
+
+test('legacy -modified selectors keep their old meanings', () => {
+  assert.deepEqual(typesFor('fx2', '1.10-modified'), typesFor('fx2', '1.10+uv'));
+  assert.deepEqual(typesFor('mod', '1.11-modified'), typesFor('mod', '1.11+uv'));
+  assert.deepEqual(typesFor('fx2', '1.12-modified'), typesFor('fx2', '1.12+uv+oct'));
+  assert.deepEqual(typesFor('fx2', '1.2-modified'), typesFor('fx2', '1.2+uv+oct'));
 });
 
 test('auto firmware follows the settings layout hint', () => {
@@ -72,24 +92,22 @@ test('AMP and CAB have no static type list; their names come from the device', (
 
 
 
-test('firmware 1.12+ appends a SysEx-only EQ Level control', () => {
-  const older = typesFor('eq', '1.11').find((type) => type.id === 0);
-  assert.equal(older.params.length, 3);
-  for (const firmware of ['1.12', '1.2', '1.3.5', '1.2-modified']) {
+test('EQ Level is a SysEx-only control in every version', () => {
+  for (const firmware of ['1.10', '1.11', '1.12', '1.2', '1.3.5', '1.2+uv+oct']) {
     for (const [id, expectedIndex] of [[0, 3], [1, 6], [2, 8]]) {
       const params = typesFor('eq', firmware).find((type) => type.id === id).params;
       const level = params.at(-1);
       assert.equal(params.length, expectedIndex + 1);
       assert.equal(level.label, 'Level');
       assert.equal(level.cc, null);
-      assert.deepEqual([level.min, level.max], [-12, 12]);
+      assert.equal(level.sysexParamIndex, expectedIndex);
     }
   }
 });
 
 test('firmware 1.12+ adds CAB Output Level on CC67', () => {
   assert.deepEqual(extraCommonParams('cab', '1.10'), []);
-  for (const firmware of ['1.12', '1.2', '1.3.5', '1.2-modified']) {
+  for (const firmware of ['1.12', '1.2', '1.3.5', '1.2+uv+oct']) {
     const params = extraCommonParams('cab', firmware);
     assert.equal(params.length, 1);
     assert.equal(params[0].label, 'Level');
@@ -122,27 +140,28 @@ test('new effect ranges follow the verified 1.3.5 catalogue', () => {
   assert.deepEqual([classic.params[1].min, classic.params[1].max], [20, 500]);
   assert.deepEqual([classic.params[2].min, classic.params[2].max], [500, 5000]);
   const gate = fx1.find((t) => t.id === 0);
-  const release = gate.params.find((p) => p.label === 'Gate Release');
+  const release = gate.params.find((p) => p.label === 'Release');
   assert.deepEqual([release.min, release.max], [5, 100]);
 });
 
-test('modified firmware maps FX2 Range slot to Pitch on 1.12+', () => {
-  const fx2 = typesFor('fx2', '1.2-modified');
-  const pitch = fx2.find((t) => t.id === 5);
-  assert.equal(pitch.name, 'Octave');
-  assert.deepEqual([pitch.params[0].min, pitch.params[0].max], [-24, 24]);
+test('modified firmware replaces FX2 Pitch (id 8), not FX2 Range (id 5)', () => {
+  const fx2 = typesFor('fx2', '1.2+uv+oct');
+  assert.equal(fx2.find((t) => t.id === 5).name, 'Range');
+  const octave = fx2.find((t) => t.id === 8);
+  assert.equal(octave.name, 'Octave');
+  assert.deepEqual([octave.params[0].min, octave.params[0].max], [0, 100]);
+  assert.equal(octave.params.length, 11);
 });
 
 
-test('firmware 1.2+ caps every delay time at 2000 ms', () => {
-  for (const firmware of ['1.2', '1.3.5', '1.2-modified']) {
+test('delay time limits follow the hardware catalogue', () => {
+  for (const firmware of ['1.2', '1.3.5', '1.2+uv+oct']) {
     for (const type of typesFor('del', firmware)) {
       const time = type.params.find((p) => p.label === 'Time' || p.label === 'Delay');
       assert.ok(time, `${type.slug} has a time control`);
-      assert.equal(time.max, 2000, `${type.slug} on ${firmware}`);
+      assert.equal(time.max, type.slug === 'bbd' ? 2000 : 3000, `${type.slug} on ${firmware}`);
     }
   }
-  assert.equal(typesFor('del', '1.10').find((t) => t.slug === 'bbd').params[0].max, 2000);
 });
 
 test('firmware 1.2 adds the new FX1 types with the supplied ranges', () => {
@@ -150,7 +169,7 @@ test('firmware 1.2 adds the new FX1 types with the supplied ranges', () => {
   const peak = fx1.find((t) => t.slug === 'peak_comp');
   assert.ok(peak);
   assert.deepEqual([peak.params[0].min, peak.params[0].max], [-60, 0]);
-  assert.equal(peak.params[1].step, 0.2);
+  assert.deepEqual([peak.params[1].min, peak.params[1].max], [1, 20]);
   const parallel = fx1.find((t) => t.slug === 'parallel_comp');
   assert.deepEqual([parallel.params[3].min, parallel.params[3].max], [0, 200]);
 });
@@ -159,7 +178,7 @@ test('firmware 1.2 additions have no CC and extend existing types', () => {
   const fx1 = typesFor('fx1', '1.2');
   assert.ok(fx1.find((t) => t.slug === 'peak_comp').params.every((p) => p.cc === null));
   const gate = fx1.find((t) => t.slug === 'gate');
-  assert.ok(gate.params.some((p) => p.label === 'Gate Release'));
+  assert.ok(gate.params.some((p) => p.label === 'Release'));
   const del = typesFor('del', '1.2').find((t) => t.slug === 'duck');
   assert.ok(del.params.some((p) => p.label === 'Sensitivity'));
 });
@@ -172,7 +191,7 @@ test('firmware 1.2 keeps the canonical REV order 4=shimmer, 5=cloud, 6=spring', 
 });
 
 test('modified firmware replaces FX2 pitch with the Octave controls', () => {
-  const types = typesFor('fx2', '1.2-modified');
+  const types = typesFor('fx2', '1.2+uv+oct');
   assert.equal(types.find((t) => t.id === 8)?.slug, 'octave');
   const octave = types.find((t) => t.slug === 'octave');
   assert.deepEqual(octave.params.map((p) => p.label), [
@@ -183,7 +202,7 @@ test('modified firmware replaces FX2 pitch with the Octave controls', () => {
 
 
 test('modified Octave uses the supplied ranges and enum options', () => {
-  const octave = typesFor('fx2', '1.2-modified').find((t) => t.slug === 'octave');
+  const octave = typesFor('fx2', '1.2+uv+oct').find((t) => t.slug === 'octave');
   const params = octave.params;
   assert.deepEqual(params.slice(0, 5).map((p) => [p.min, p.max]),
     [[0, 100], [0, 100], [0, 100], [0, 100], [0, 100]]);
@@ -196,7 +215,7 @@ test('modified Octave uses the supplied ranges and enum options', () => {
 });
 
 test('modified firmware replaces MOD Velvet Vibrato with UniVibe', () => {
-  const types = typesFor('mod', '1.2-modified');
+  const types = typesFor('mod', '1.2+uv+oct');
   assert.equal(types.some((t) => t.slug === 'velvet_vibrato'), false);
   const vibe = types.find((t) => t.slug === 'univibe');
   assert.deepEqual(vibe.params.map((p) => p.label), ['Speed', 'Depth', 'Level', 'Mode']);

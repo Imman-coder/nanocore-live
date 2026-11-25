@@ -1,7 +1,7 @@
 <script>
   import { app, ctx } from '../engine.js';
   import { createDefaultState, exportState, importState, normalizeState, USER_SCENE_KEYS } from '../../core/store.js';
-  import { FIRMWARE_OPTIONS } from '../../core/versions.js';
+  import { FIRMWARE_OPTIONS, FIRMWARE_LABELS } from '../../core/versions.js';
 
   const defaults = createDefaultState().globals;
   let globals = structuredClone($app.state?.globals ?? defaults);
@@ -195,7 +195,7 @@
 <div class="field">
   <label>Firmware (FX type lists) <select data-global="firmware" bind:value={globals.firmware}>
     {#each FIRMWARE_OPTIONS as version}
-      <option value={version}>{version === 'auto' ? `Auto (layout ${globals.settingsLayout ?? 1})` : version}</option>
+      <option value={version}>{FIRMWARE_LABELS[version] ?? version}</option>
     {/each}
   </select></label>
   <span class="muted small">Auto follows the 0x65 settings-layout hint. Newer firmware adds MOD/FX2 types; pick explicitly if Auto is wrong.</span>
