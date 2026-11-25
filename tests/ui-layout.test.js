@@ -73,6 +73,7 @@ test('Editor keeps scenes, stomps, knobs and preset actions', () => {
   assert.match(editor, /<Knob/);
   assert.match(editor, /renamePresetOnDevice/);
   assert.match(editor, /savePreset/);
+  assert.doesNotMatch(editor, /assignments-details|Per-preset MIDI assignments|<Assignments/);
 });
 
 test('Live keeps the editable grid and all display item kinds', () => {

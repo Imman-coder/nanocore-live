@@ -6,7 +6,6 @@
   import { app, ctx as engineCtx } from '../engine.js';
   import Knob from './Knob.svelte';
   import PedalPopup from './PedalPopup.svelte';
-  import Assignments from './Assignments.svelte';
   import { BLOCK_BY_ID, chainBlockIds } from '../../core/spec.js';
   import { typesFor, extraCommonParams } from '../../core/versions.js';
   import { ccToEnum, enumToCc } from '../../core/scaling.js';
@@ -531,10 +530,6 @@
     {/if}
   </div>
 
-  <details class="card assignments-details">
-    <summary>Per-preset MIDI assignments</summary>
-    <Assignments {ctx} />
-  </details>
 {/if}
 
 {#if popupTarget}
@@ -556,7 +551,6 @@
   .edited-presets { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
   .chain-strip { display: flex; flex-wrap: wrap; align-items: stretch; gap: 4px; }
   .chain-strip :global(.chain-row) { touch-action: pan-y; }
-  .assignments-details { margin-top: 12px; }
   @media (max-width: 640px) {
     .editor-layout { flex-direction: column; }
     .editor-sidebar { width: auto; }
