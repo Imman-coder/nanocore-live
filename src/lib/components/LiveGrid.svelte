@@ -192,8 +192,7 @@
 </script>
 
 <div
-  class="live-grid"
-  class:editing
+  class="grid h-full w-full min-h-[240px] gap-1 {editing ? 'touch-none' : ''}"
   bind:this={gridEl}
   style="grid-template-columns: repeat({columns}, minmax(0, 1fr)); grid-template-rows: repeat({rows}, minmax(72px, 1fr))"
   on:dragover={onDragOver}
@@ -203,14 +202,13 @@
 >
   {#each empties as cell (`${cell.row}:${cell.col}`)}
     <div
-      class="live-grid-cell empty"
-      class:drop-target={dropTarget === `${cell.row}:${cell.col}`}
+      class="relative min-h-0 min-w-0 rounded-[10px] border border-dashed border-line p-1 {dropTarget === `${cell.row}:${cell.col}` ? 'outline outline-2 outline-[#6bf]' : ''} {editing ? 'touch-none' : ''}"
       role="listitem"
       data-grid-pos={`${cell.row}:${cell.col}`}
       style:grid-area={`${cell.row} / ${cell.col}`}
     >
       {#if editing}
-        <select data-grid-cell={`${cell.row}:${cell.col}`} value="empty" aria-label={`Item at row ${cell.row}, column ${cell.col}`}
+        <select data-grid-cell={`${cell.row}:${cell.col}`} class="w-full text-base rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit" value="empty" aria-label={`Item at row ${cell.row}, column ${cell.col}`}
           on:change={(event) => onEmptySelect(cell, event)}>
           {#each choices as choice (choice.id)}
             <option value={choice.id}>{choice.label}</option>
@@ -222,9 +220,7 @@
 
   {#each placed as item (item.id)}
     <div
-      class="live-grid-cell placed"
-      class:editing
-      class:drop-target={dropTarget === `${item.row}:${item.col}`}
+      class="relative min-h-0 min-w-0 rounded-[10px] border border-solid border-line p-1 {dropTarget === `${item.row}:${item.col}` ? 'outline outline-2 outline-[#6bf]' : ''} {editing ? 'touch-none' : ''}"
       role="listitem"
       data-grid-item={item.id}
       data-grid-pos={`${item.row}:${item.col}`}
@@ -235,35 +231,34 @@
       on:pointerdown={(event) => onCellPointerDown(event, item)}
     >
       {#if item.kind === 'tap'}
-        <button class="stomp scene-stomp" on:click={() => ctx.tapTempo()}>
-          <span class="stomp-label">Tap tempo</span>
-          <span class="stomp-cc">{globals.tempo?.bpm ? `${globals.tempo.bpm} BPM · tap to retap` : 'tap to set BPM'}</span>
+        <button class="flex h-full min-h-0 w-full flex-col gap-1 rounded-[10px] border border-line bg-panel p-2.5 text-left font-[inherit] text-inherit cursor-pointer hover:border-accent disabled:cursor-not-allowed disabled:opacity-50" on:click={() => ctx.tapTempo()}>
+          <span class="font-bold">Tap tempo</span>
+          <span class="overflow-hidden text-ellipsis text-[11px] text-muted">{globals.tempo?.bpm ? `${globals.tempo.bpm} BPM · tap to retap` : 'tap to set BPM'}</span>
         </button>
       {:else if item.kind === 'scene'}
         {@const scene = scenes.find((entry) => entry.key === item.ref)}
-        <button class="stomp scene-stomp" class:on={state.activeScene === item.ref}
-          class:empty={!scene?.stored} aria-pressed={state.activeScene === item.ref}
+        <button class="flex h-full min-h-0 w-full flex-col gap-1 rounded-[10px] border border-line bg-panel p-2.5 text-left font-[inherit] text-inherit cursor-pointer hover:border-accent disabled:cursor-not-allowed disabled:opacity-50 {state.activeScene === item.ref ? '!border-accent-2' : ''}" aria-pressed={state.activeScene === item.ref}
           disabled={!scene?.stored} on:click={() => ctx.recallScene(item.ref)}>
-          <span class="stomp-label">{scene?.name ?? item.ref}</span>
-          <span class="stomp-cc">{state.activeScene === item.ref ? 'Active · ' : ''}{!scene?.stored ? 'empty' : item.ref === 'base' ? (ctx.baseOverridden() ? 'saved values' : 'pedal values') : 'stored scene'}</span>
+          <span class="font-bold">{scene?.name ?? item.ref}</span>
+          <span class="overflow-hidden text-ellipsis text-[11px] text-muted">{state.activeScene === item.ref ? 'Active · ' : ''}{!scene?.stored ? 'empty' : item.ref === 'base' ? (ctx.baseOverridden() ? 'saved values' : 'pedal values') : 'stored scene'}</span>
         </button>
       {:else if item.kind === 'stomp'}
         {@const fs = stomps.find((entry) => entry.id === item.ref)}
-        <button class="stomp" class:on={fs?.active} aria-pressed={Boolean(fs?.active)} on:click={() => ctx.toggleStomp(item.ref)}>
-          <span class="stomp-label">{fs?.label ?? item.ref}</span>
-          <span class="stomp-cc">{fs?.name ?? item.ref} · {fs ? ctx.describeTrigger(fs.trigger) : ''}</span>
+        <button class="flex h-full min-h-0 w-full flex-col gap-1 rounded-[10px] border border-line bg-panel p-2.5 text-left font-[inherit] text-inherit cursor-pointer hover:border-accent disabled:cursor-not-allowed disabled:opacity-50 {fs?.active ? '!border-accent-2' : ''}" aria-pressed={Boolean(fs?.active)} on:click={() => ctx.toggleStomp(item.ref)}>
+          <span class="font-bold">{fs?.label ?? item.ref}</span>
+          <span class="overflow-hidden text-ellipsis text-[11px] text-muted">{fs?.name ?? item.ref} · {fs ? ctx.describeTrigger(fs.trigger) : ''}</span>
         </button>
       {:else if item.kind === 'expression'}
         {@const pedal = pedals.find((entry) => entry.id === item.ref)}
         {#if pedal}
           <ExpressionFader {pedal} {ctx} />
         {:else}
-          <div class="stomp muted"><div class="stomp-label">{item.ref}</div><div class="stomp-cc">no such pedal</div></div>
+          <div class="flex h-full min-h-0 w-full flex-col gap-1 rounded-[10px] bg-panel p-2.5 text-left text-muted opacity-55"><div class="font-bold">{item.ref}</div><div class="overflow-hidden text-ellipsis text-[11px] text-muted">no such pedal</div></div>
         {/if}
       {:else if item.kind === 'preset' && item.ref === 'dropdown'}
-        <div class="stomp preset-stomp">
-          <div class="stomp-label">Preset</div>
-          <select data-preset-select="1" aria-label="Select preset" value={state.activePreset}
+        <div class="flex h-full min-h-0 w-full flex-col gap-1 rounded-[10px] bg-panel p-2.5 text-left">
+          <div class="font-bold">Preset</div>
+          <select data-preset-select="1" class="w-full text-base rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit" aria-label="Select preset" value={state.activePreset}
             on:change={(event) => ctx.recallPreset(Number(event.currentTarget.value))}>
             {#each presets as preset (preset.number)}
               <option value={preset.number} selected={preset.number === state.activePreset}>{preset.number} · {preset.label}</option>
@@ -272,37 +267,25 @@
         </div>
       {:else if item.kind === 'preset'}
         {@const preset = presets.find((entry) => entry.number === Number(item.ref))}
-        <button class="stomp scene-stomp" on:click={() => ctx.recallPreset(Number(item.ref))}>
-          <span class="stomp-label">{preset?.label ?? `Preset ${item.ref}`}</span>
-          <span class="stomp-cc">#{item.ref}</span>
+        <button class="flex h-full min-h-0 w-full flex-col gap-1 rounded-[10px] border border-line bg-panel p-2.5 text-left font-[inherit] text-inherit cursor-pointer hover:border-accent disabled:cursor-not-allowed disabled:opacity-50" on:click={() => ctx.recallPreset(Number(item.ref))}>
+          <span class="font-bold">{preset?.label ?? `Preset ${item.ref}`}</span>
+          <span class="overflow-hidden text-ellipsis text-[11px] text-muted">#{item.ref}</span>
         </button>
       {/if}
 
       {#if editing}
-        <select data-grid-cell-item={item.id} class="grid-item-select" aria-label="Change this tile"
+        <select data-grid-cell-item={item.id} class="absolute left-0.5 right-0.5 top-0.5 z-[3] w-full text-base rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit" aria-label="Change this tile"
           value={item.kind === 'tap' ? 'tap' : `${item.kind}:${item.ref ?? ''}`}
           on:change={(event) => onCellSelect(item, event)}>
           {#each choices as choice (choice.id)}
             <option value={choice.id}>{choice.label}</option>
           {/each}
         </select>
-        <span class="grid-resize col" data-resize={item.id} data-axis="col" title="Drag to change column span"
+        <span class="absolute z-[4] touch-none right-0 top-0 h-full w-3.5 cursor-ew-resize" data-resize={item.id} data-axis="col" title="Drag to change column span"
           on:pointerdown={(event) => onResizeDown(event, item, 'col')}></span>
-        <span class="grid-resize row" data-resize={item.id} data-axis="row" title="Drag to change row span"
+        <span class="absolute z-[4] touch-none bottom-0 left-0 h-3.5 w-full cursor-ns-resize" data-resize={item.id} data-axis="row" title="Drag to change row span"
           on:pointerdown={(event) => onResizeDown(event, item, 'row')}></span>
       {/if}
     </div>
   {/each}
 </div>
-
-<style>
-  .live-grid { display: grid; width: 100%; height: 100%; gap: 4px; }
-  .live-grid-cell { position: relative; min-width: 0; min-height: 0; }
-  .live-grid-cell :global(.stomp) { width: 100%; height: 100%; min-height: 0; }
-  .live-grid.editing .live-grid-cell { touch-action: none; }
-  .grid-item-select { position: absolute; z-index: 3; left: 2px; right: 2px; top: 2px; font-size: 16px; }
-  .grid-resize { position: absolute; z-index: 4; touch-action: none; }
-  .grid-resize.col { top: 0; right: 0; width: 14px; height: 100%; cursor: ew-resize; }
-  .grid-resize.row { left: 0; bottom: 0; height: 14px; width: 100%; cursor: ns-resize; }
-  .drop-target { outline: 2px solid #6bf; }
-</style>

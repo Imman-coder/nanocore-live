@@ -64,9 +64,9 @@
   }
 </script>
 
-<div class="knob-wrap">
+<div class="relative inline-flex flex-col items-center">
   <div
-    class="knob"
+    class="grid h-[54px] w-[54px] cursor-ns-resize touch-none place-items-center rounded-full border-2 border-line bg-[#0f1319]"
     role="slider"
     tabindex="0"
     aria-label={label}
@@ -79,12 +79,12 @@
     on:pointercancel={onPointerUp}
     on:keydown={onKeyDown}
   >
-    <div class="knob-dial" style="--angle: {angle}deg"><i class="knob-pointer"></i></div>
+    <div class="relative h-[38px] w-[38px] rounded-full bg-panel-2 [transform:rotate(var(--angle,0deg))]" style="--angle: {angle}deg"><i class="absolute left-1/2 top-[3px] h-3 w-0.5 -translate-x-1/2 bg-accent"></i></div>
   </div>
-  <div class="knob-meta"><label for={id}>{label}</label><span class="value">{shown}</span></div>
+  <div class="flex flex-col gap-0.5 text-[11px]"><label class="text-xs text-muted" for={id}>{label}</label><span class="text-center">{shown}</span></div>
   <input
     {id}
-    class="knob-input"
+    class="pointer-events-none absolute h-px w-px rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit opacity-0"
     type="range"
     min="0"
     max={ceiling}
@@ -96,9 +96,4 @@
   >
 </div>
 
-<style>
-  .knob-wrap { position: relative; display: inline-flex; flex-direction: column; align-items: center; }
-  .knob { cursor: ns-resize; touch-action: none; }
-  .knob-dial { transform: rotate(var(--angle)); }
-  .knob-input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
-</style>
+

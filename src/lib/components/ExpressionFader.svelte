@@ -128,12 +128,14 @@
   }
 </script>
 
-<div class="expression-stomp" class:muted={!assigned} class:full-touch={Boolean(pedal?.fullTouch)} bind:this={rootEl}>
-  <div class="stomp-label">{pedal?.name ?? pedal?.id}</div>
-  <div class="stomp-cc">{ctx.describeTrigger(pedal?.trigger)} → {targetLabel}</div>
+<div
+  class="flex h-full min-h-0 w-full flex-col"
+  bind:this={rootEl}
+>
+  <div class="font-bold">{pedal?.name ?? pedal?.id}</div>
+  <div class="overflow-hidden text-ellipsis text-[11px] text-muted">{ctx.describeTrigger(pedal?.trigger)} → {targetLabel}</div>
   <div
-    class="meter expression-meter interactive"
-    class:touch={Boolean(pedal?.fullTouch)}
+    class="relative block min-h-6 flex-1 cursor-ew-resize touch-none overflow-hidden rounded-md bg-[#0f1319] bg-gradient-to-r from-accent-2 to-accent {vertical ? '!mx-auto !my-0.5 !h-auto !w-6' : 'h-full w-full'} {pedal?.fullTouch ? '!min-h-11' : ''}"
     bind:this={meterEl}
     id={`expr-meter-${pedal?.id}`}
     data-expression-meter={pedal?.id}
@@ -148,15 +150,10 @@
     on:keydown={onKey}
   >
     <i id={`expr-meter-fill-${pedal?.id}`}
+      class="absolute bottom-0 left-0 bg-current opacity-60 {vertical ? 'w-full' : ''}"
       style={vertical ? `height: ${percent}%; width: 100%` : `width: ${percent}%`}></i>
   </div>
-  <div class="stomp-cc" id={`expr-value-${pedal?.id}`}>{percent}%</div>
+  <div class="overflow-hidden text-ellipsis text-[11px] text-muted" id={`expr-value-${pedal?.id}`}>{percent}%</div>
 </div>
 
-<style>
-  .expression-stomp { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 0; }
-  .meter { position: relative; flex: 1 1 auto; min-height: 24px; touch-action: none; cursor: pointer; overflow: hidden; }
-  .meter i { position: absolute; left: 0; bottom: 0; background: currentColor; opacity: .6; }
-  .meter[data-orientation="vertical"] i { left: 0; right: 0; }
-  .meter.touch { min-height: 44px; }
-</style>
+

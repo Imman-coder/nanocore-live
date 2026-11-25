@@ -39,7 +39,7 @@
   }
 
   function onStompTarget(event, fsId) {
-    const chosen = [...event.currentTarget.closest('.binding').querySelectorAll('[data-asg="stomp-target"]:checked')]
+    const chosen = [...event.currentTarget.closest('[data-binding]').querySelectorAll('[data-asg="stomp-target"]:checked')]
       .map((box) => box.dataset.block);
     const fixed = stomp(fsId).targets.find((target) => typeof target.value === 'number');
     putStomp(fsId, { targets: chosen.map((block) => ({ block, ...(fixed ? { value: fixed.value } : {}) })) });
@@ -71,14 +71,14 @@
 </script>
 
 {#if tableOnly}
-  <table>
-    <thead><tr><th>Virtual pedal</th><th>IN (controller)</th><th>OUT (NANOCORE)</th></tr></thead>
+  <table class="w-full border-collapse text-xs">
+    <thead><tr><th class="border-b border-line px-1.5 py-1.5 text-left">Virtual pedal</th><th class="border-b border-line px-1.5 py-1.5 text-left">IN (controller)</th><th class="border-b border-line px-1.5 py-1.5 text-left">OUT (NANOCORE)</th></tr></thead>
     <tbody>
       {#each footswitches as fs (fs.id)}
         <tr>
-          <td>{effectiveStompLabel($app.state, current, fs.id)}</td>
-          <td>{ctx.describeTrigger(fs.trigger)}</td>
-          <td>
+          <td class="border-b border-line px-1.5 py-1.5 text-left">{effectiveStompLabel($app.state, current, fs.id)}</td>
+          <td class="border-b border-line px-1.5 py-1.5 text-left">{ctx.describeTrigger(fs.trigger)}</td>
+          <td class="border-b border-line px-1.5 py-1.5 text-left">
             {(stomp(fs.id).targets ?? []).map((target) =>
               `${BLOCK_BY_ID[target.block]?.name}:CC${BLOCK_BY_ID[target.block]?.onOffCc}=${target.value ?? 'incoming'}`,
             ).join(', ') || '—'}
@@ -87,26 +87,26 @@
       {/each}
       {#each expressions as entry, index (entry.id ?? index)}
         <tr>
-          <td>{entry.id}</td>
-          <td>CC {entry.trigger?.number}</td>
-          <td>CC {paramCcFor(entry.target, entry.paramIndex ?? 0)} ({entry.invert || entry.mode === 'invert' ? 'inverted' : 'normal'})</td>
+          <td class="border-b border-line px-1.5 py-1.5 text-left">{entry.id}</td>
+          <td class="border-b border-line px-1.5 py-1.5 text-left">CC {entry.trigger?.number}</td>
+          <td class="border-b border-line px-1.5 py-1.5 text-left">CC {paramCcFor(entry.target, entry.paramIndex ?? 0)} ({entry.invert || entry.mode === 'invert' ? 'inverted' : 'normal'})</td>
         </tr>
       {/each}
     </tbody>
   </table>
 {:else}
-  <h3>Virtual footswitches → FX blocks</h3>
-  <p class="muted small">Incoming messages are configured in Globals. Each preset chooses its own button names and which blocks each button drives.</p>
+  <h3 class="mb-2 mt-3.5 text-xs uppercase tracking-[0.08em] text-muted">Virtual footswitches → FX blocks</h3>
+  <p class="text-muted text-xs">Incoming messages are configured in Globals. Each preset chooses its own button names and which blocks each button drives.</p>
   {#each footswitches as fs (fs.id)}
     {@const binding = stomp(fs.id)}
     {@const mode = binding.mode ?? 'value'}
     {@const fixed = binding.targets.find((target) => typeof target.value === 'number')?.value}
-    <div class="binding">
-      <div class="field">
-        <label for={`asg-label-${fs.id}`}>{fs.name} · {ctx.describeTrigger(fs.trigger)}</label>
-        <input id={`asg-label-${fs.id}`} data-asg="stomp-label" placeholder="Button label" value={binding.label ?? ''}
+    <div data-binding class="mb-2 rounded-[10px] border border-line bg-panel-2 p-2.5">
+      <div class="mb-2.5 flex flex-wrap items-center gap-2">
+        <label for={`asg-label-${fs.id}`} class="text-xs text-muted min-w-[90px]">{fs.name} · {ctx.describeTrigger(fs.trigger)}</label>
+        <input id={`asg-label-${fs.id}`} class="rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit" data-asg="stomp-label" placeholder="Button label" value={binding.label ?? ''}
           on:change={(event) => onStompLabel(event, fs.id)}>
-        <select data-asg="stomp-mode" value={fixed === 127 ? 'on' : fixed === 0 ? 'off' : mode}
+        <select data-asg="stomp-mode" class="rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit" value={fixed === 127 ? 'on' : fixed === 0 ? 'off' : mode}
           on:change={(event) => onStompMode(event, fs.id)}>
           <option value="value" selected={mode === 'value' && fixed === undefined}>Incoming value</option>
           <option value="toggle" selected={mode === 'toggle'}>Toggle</option>
@@ -114,74 +114,74 @@
           <option value="off" selected={fixed === 0}>Always OFF</option>
         </select>
       </div>
-      <div class="field">
+      <div class="mb-2.5 flex flex-wrap items-center gap-2">
         {#each BLOCKS as block (block.id)}
-          <label>
-            <input type="checkbox" data-asg="stomp-target" data-fs={fs.id} data-block={block.id}
+          <label class="text-xs text-muted min-w-[90px]">
+            <input type="checkbox" class="rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit" data-asg="stomp-target" data-fs={fs.id} data-block={block.id}
               checked={binding.targets.some((target) => target.block === block.id)}
               on:change={(event) => onStompTarget(event, fs.id)}>
             {block.name}
           </label>
         {/each}
       </div>
-      <div class="muted small">{summary(fs, binding)}</div>
+      <div class="text-muted text-xs">{summary(fs, binding)}</div>
     </div>
   {/each}
 
-  <h3>Expression pedals → parameters</h3>
-  <p class="muted small">Each expression maps an incoming CC to one parameter CC on the NANOCORE.</p>
+  <h3 class="mb-2 mt-3.5 text-xs uppercase tracking-[0.08em] text-muted">Expression pedals → parameters</h3>
+  <p class="text-muted text-xs">Each expression maps an incoming CC to one parameter CC on the NANOCORE.</p>
   {#each expressions as entry, index (entry.id ?? index)}
-    <div class="binding">
-      <div class="field">
-        <label for={`asg-expr-cc-${index}`}>Expression {index + 1}</label>
-        <input id={`asg-expr-cc-${index}`} data-asg="expr-cc" type="number" min="0" max="127"
+    <div data-binding class="mb-2 rounded-[10px] border border-line bg-panel-2 p-2.5">
+      <div class="mb-2.5 flex flex-wrap items-center gap-2">
+        <label for={`asg-expr-cc-${index}`} class="text-xs text-muted min-w-[90px]">Expression {index + 1}</label>
+        <input id={`asg-expr-cc-${index}`} class="rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit" data-asg="expr-cc" type="number" min="0" max="127"
           value={entry.trigger?.number ?? 7}
           on:change={(event) => patchExpression(index, { trigger: { ...entry.trigger, number: Number(event.currentTarget.value) } })}>
-        <span class="muted small">{ctx.describeTrigger(entry.trigger)}</span>
-        <button class="small danger" on:click={() => removeExpression(index)}>Remove</button>
+        <span class="text-muted text-xs">{ctx.describeTrigger(entry.trigger)}</span>
+        <button class="cursor-pointer rounded-lg border border-line bg-panel-2 px-2 py-1 font-[inherit] text-danger text-xs hover:border-accent disabled:cursor-not-allowed disabled:opacity-50" on:click={() => removeExpression(index)}>Remove</button>
       </div>
-      <div class="field">
-        <label for={`asg-expr-block-${index}`}>Target</label>
-        <select id={`asg-expr-block-${index}`} value={entry.target}
+      <div class="mb-2.5 flex flex-wrap items-center gap-2">
+        <label for={`asg-expr-block-${index}`} class="text-xs text-muted min-w-[90px]">Target</label>
+        <select id={`asg-expr-block-${index}`} class="rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit" value={entry.target}
           on:change={(event) => patchExpression(index, { target: event.currentTarget.value })}>
           {#each BLOCKS as block (block.id)}
             <option value={block.id} selected={entry.target === block.id}>{block.name}</option>
           {/each}
         </select>
-        <label for={`asg-expr-param-${index}`}>Param #</label>
-        <input id={`asg-expr-param-${index}`} data-asg="expr-param" type="number" min="0" max="11"
+        <label for={`asg-expr-param-${index}`} class="text-xs text-muted min-w-[90px]">Param #</label>
+        <input id={`asg-expr-param-${index}`} class="rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit" data-asg="expr-param" type="number" min="0" max="11"
           value={entry.paramIndex ?? 0}
           on:change={(event) => patchExpression(index, { paramIndex: Number(event.currentTarget.value) })}>
-        <label for={`asg-expr-mode-${index}`}>Mode</label>
-        <select id={`asg-expr-mode-${index}`} value={entry.invert || entry.mode === 'invert' ? 'invert' : 'value'}
+        <label for={`asg-expr-mode-${index}`} class="text-xs text-muted min-w-[90px]">Mode</label>
+        <select id={`asg-expr-mode-${index}`} class="rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit" value={entry.invert || entry.mode === 'invert' ? 'invert' : 'value'}
           on:change={(event) => patchExpression(index, { invert: event.currentTarget.value === 'invert', mode: event.currentTarget.value })}>
           <option value="value">Normal</option>
           <option value="invert">Inverted</option>
         </select>
       </div>
-      <div class="muted small">Sends CC {paramCcFor(entry.target ?? 'fx1', entry.paramIndex ?? 0)}</div>
+      <div class="text-muted text-xs">Sends CC {paramCcFor(entry.target ?? 'fx1', entry.paramIndex ?? 0)}</div>
     </div>
   {:else}
-    <p class="muted small">No expression pedals assigned to this preset.</p>
+    <p class="text-muted text-xs">No expression pedals assigned to this preset.</p>
   {/each}
-  <button on:click={addExpression}>+ Add expression pedal</button>
+  <button class="cursor-pointer rounded-lg border border-line bg-panel-2 px-3 py-1.5 font-[inherit] text-inherit hover:border-accent disabled:cursor-not-allowed disabled:opacity-50" on:click={addExpression}>+ Add expression pedal</button>
 
   <details>
     <summary>Raw assignments</summary>
-    <table>
-      <thead><tr><th>Virtual pedal</th><th>IN (controller)</th><th>OUT (NANOCORE)</th></tr></thead>
+    <table class="w-full border-collapse text-xs">
+      <thead><tr><th class="border-b border-line px-1.5 py-1.5 text-left">Virtual pedal</th><th class="border-b border-line px-1.5 py-1.5 text-left">IN (controller)</th><th class="border-b border-line px-1.5 py-1.5 text-left">OUT (NANOCORE)</th></tr></thead>
       <tbody>
         {#each footswitches as fs (fs.id)}
           <tr>
-            <td>{effectiveStompLabel($app.state, current, fs.id)}</td>
-            <td>{ctx.describeTrigger(fs.trigger)}</td>
-            <td>{(stomp(fs.id).targets ?? []).map((target) => `${BLOCK_BY_ID[target.block]?.name}:CC${BLOCK_BY_ID[target.block]?.onOffCc}=${target.value ?? 'incoming'}`).join(', ') || '—'}</td>
+            <td class="border-b border-line px-1.5 py-1.5 text-left">{effectiveStompLabel($app.state, current, fs.id)}</td>
+            <td class="border-b border-line px-1.5 py-1.5 text-left">{ctx.describeTrigger(fs.trigger)}</td>
+            <td class="border-b border-line px-1.5 py-1.5 text-left">{(stomp(fs.id).targets ?? []).map((target) => `${BLOCK_BY_ID[target.block]?.name}:CC${BLOCK_BY_ID[target.block]?.onOffCc}=${target.value ?? 'incoming'}`).join(', ') || '—'}</td>
           </tr>
         {/each}
         {#each expressions as entry, index (entry.id ?? index)}
           <tr>
-            <td>{entry.id}</td><td>CC {entry.trigger?.number}</td>
-            <td>CC {paramCcFor(entry.target, entry.paramIndex ?? 0)} ({entry.invert || entry.mode === 'invert' ? 'inverted' : 'normal'})</td>
+            <td class="border-b border-line px-1.5 py-1.5 text-left">{entry.id}</td><td class="border-b border-line px-1.5 py-1.5 text-left">CC {entry.trigger?.number}</td>
+            <td class="border-b border-line px-1.5 py-1.5 text-left">CC {paramCcFor(entry.target, entry.paramIndex ?? 0)} ({entry.invert || entry.mode === 'invert' ? 'inverted' : 'normal'})</td>
           </tr>
         {/each}
       </tbody>

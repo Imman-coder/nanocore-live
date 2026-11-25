@@ -51,75 +51,72 @@
   }
 </script>
 
-<div class="content">
+<div class="flex min-h-0 min-w-0 flex-1 flex-col [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:rounded-lg [&::-webkit-scrollbar-thumb]:bg-line">
 {#if !globals.hideLivePresetLabel}
-  <h2>Live <span class="muted small">— NANOCORE preset {preset}</span></h2>
+  <h2 class="m-0 mb-3 text-lg">Live <span class="text-muted text-xs">— NANOCORE preset {preset}</span></h2>
 {/if}
 
 {#if editing}
-  <div class="field grid-controls">
-    <label for="live-columns">Columns
+  <div class="mb-2.5 flex flex-wrap items-center gap-2">
+    <label class="text-xs text-muted" for="live-columns">Columns
       <input id="live-columns" type="number" min="1" max="64" value={layout.grid?.columns ?? 4}
+        class="rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit"
         on:change={(event) => ctx.setLiveGrid({ columns: Math.max(1, Math.min(64, Number(event.currentTarget.value) || 1)) })}>
     </label>
-    <label for="live-rows">Rows
+    <label class="text-xs text-muted" for="live-rows">Rows
       <input id="live-rows" type="number" min="1" max="64" value={layout.grid?.rows ?? 3}
+        class="rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit"
         on:change={(event) => ctx.setLiveGrid({ rows: Math.max(1, Math.min(64, Number(event.currentTarget.value) || 1)) })}>
     </label>
-    <button class="primary" on:click={() => ctx.toggleLiveEdit()}>Done editing</button>
-    <span class="muted small">Pick items in empty cells; drag the right/bottom edge of a tile to span more cells.</span>
+    <button class="cursor-pointer rounded-lg border border-line bg-panel-2 px-3 py-1.5 font-[inherit] text-inherit hover:border-accent disabled:cursor-not-allowed disabled:opacity-50 !border-accent !bg-accent font-bold !text-[#1a1206]" on:click={() => ctx.toggleLiveEdit()}>Done editing</button>
+    <span class="text-muted text-xs">Pick items in empty cells; drag the right/bottom edge of a tile to span more cells.</span>
   </div>
 {/if}
 
-<div class="live-preset-bar card">
-  <label class="muted small" for="live-preset-select">Current NANOCORE preset</label>
-  <select id="live-preset-select" value={preset} on:change={(event) => ctx.recallPreset(Number(event.currentTarget.value))}>
+<div class="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-line bg-panel p-3.5">
+  <label class="text-xs text-muted" for="live-preset-select">Current NANOCORE preset</label>
+  <select id="live-preset-select" class="rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit" value={preset} on:change={(event) => ctx.recallPreset(Number(event.currentTarget.value))}>
     {#each presets as entry (entry.number)}
       <option value={entry.number} selected={entry.number === preset}>{entry.number} · {entry.label}</option>
     {/each}
   </select>
-  <div class="row-actions">
-    <button on:click={() => step(-1)} aria-label="Previous preset">◀</button>
-    <button on:click={() => ctx.recallPreset(preset)}>Recall</button>
-    <button on:click={() => step(1)} aria-label="Next preset">▶</button>
+  <div class="mb-2.5 flex flex-wrap items-center gap-2">
+    <button class="cursor-pointer rounded-lg border border-line bg-panel-2 px-3 py-1.5 font-[inherit] text-inherit hover:border-accent disabled:cursor-not-allowed disabled:opacity-50" on:click={() => step(-1)} aria-label="Previous preset">◀</button>
+    <button class="cursor-pointer rounded-lg border border-line bg-panel-2 px-3 py-1.5 font-[inherit] text-inherit hover:border-accent disabled:cursor-not-allowed disabled:opacity-50" on:click={() => ctx.recallPreset(preset)}>Recall</button>
+    <button class="cursor-pointer rounded-lg border border-line bg-panel-2 px-3 py-1.5 font-[inherit] text-inherit hover:border-accent disabled:cursor-not-allowed disabled:opacity-50" on:click={() => step(1)} aria-label="Next preset">▶</button>
   </div>
   {#if edited.length}
-    <div class="edited-list">
+    <div class="flex flex-wrap gap-1">
       {#each edited as number (number)}
-        <button class="pill" on:click={() => ctx.recallPreset(number)}>{ctx.presetLabel(number)} · {number}</button>
+        <button class="cursor-pointer rounded-lg border border-line bg-panel-2 px-3 py-1.5 font-[inherit] text-inherit hover:border-accent disabled:cursor-not-allowed disabled:opacity-50 !rounded-full !px-2 !py-0.5 text-[11px]" on:click={() => ctx.recallPreset(number)}>{ctx.presetLabel(number)} · {number}</button>
       {/each}
     </div>
   {/if}
 </div>
 
-<div class="live-board-wrap" class:fit-screen={Boolean(layout.fitScreen)} bind:this={wrapEl}>
-  <div class="live-board" bind:this={boardEl}>
+<div
+  class="flex justify-center {layout.fitScreen ? 'h-full w-full min-h-0 flex-1 items-center overflow-hidden' : 'flex-none items-start'}"
+  bind:this={wrapEl}
+>
+  <div class="flex min-h-0 w-full flex-col" bind:this={boardEl}>
     <LiveGrid {ctx} />
   </div>
 </div>
 
 {#if !globals.hideAssignmentsButton}
-  <p class="assignments-toggle">
-    <button class="ghost" on:click={() => ctx.update({ showAdvanced: !advanced })}>
+  <p class="my-2 text-center">
+    <button class="cursor-pointer rounded-lg border border-line bg-panel-2 px-3 py-1.5 font-[inherit] text-inherit hover:border-accent disabled:cursor-not-allowed disabled:opacity-50 !bg-transparent" on:click={() => ctx.update({ showAdvanced: !advanced })}>
       {advanced ? 'Hide' : 'Show'} parameter assignments
     </button>
   </p>
 {/if}
 {#if advanced}
-  <div class="card">
-    <h3>Advanced — raw assignments</h3>
+  <div class="mb-3 rounded-xl border border-line bg-panel p-3.5">
+    <h3 class="mb-2 mt-3.5 text-xs uppercase tracking-[0.08em] text-muted">Advanced — raw assignments</h3>
     <Assignments {ctx} tableOnly={true} />
-    <p class="muted small">Controller ports: {(ctx.ports?.inputs ?? []).filter((port) => port.role === 'controller').map((port) => port.name).join(', ') || 'none'}</p>
+    <p class="text-muted text-xs">Controller ports: {(ctx.ports?.inputs ?? []).filter((port) => port.role === 'controller').map((port) => port.name).join(', ') || 'none'}</p>
   </div>
 {/if}
 </div>
 
-<style>
-  .content { display: flex; flex-direction: column; min-width: 0; min-height: 0; flex: 1 1 auto; }
-  .live-board-wrap { display: flex; flex: 0 0 auto; min-height: auto; align-items: flex-start; justify-content: center; }
-  .live-board-wrap.fit-screen { flex: 1 1 auto; width: 100%; height: 100%; min-height: 0; overflow: hidden; align-items: center; }
-  .live-board { display: flex; flex-direction: column; width: 100%; min-height: 0; }
-  .live-preset-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-  .edited-list { display: flex; flex-wrap: wrap; gap: 4px; }
-  .grid-controls { flex-wrap: wrap; }
-</style>
+

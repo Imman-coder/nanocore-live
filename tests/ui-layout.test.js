@@ -15,11 +15,11 @@ const grid = read('LiveGrid');
 const fader = read('ExpressionFader');
 
 test('the Svelte shell owns mode switching, settings, log and toast', () => {
-  assert.match(app, /class:start-mode/);
-  assert.match(app, /class:demo-mode/);
+  assert.match(app, /data-mode=\{mode\}/);
+  assert.match(app, /data-demo=\{\$app\.demo\}/);
   assert.match(app, /<Settings open=/);
-  assert.match(app, /class="logbar"/);
-  assert.match(app, /class="toast"/);
+  assert.match(app, /MIDI/);
+  assert.match(app, /fixed right-\[18px\] top-16 z-\[70\]/);
   assert.match(engine, /export const app = writable/);
   assert.match(engine, /export const ctx = \{/);
 });
@@ -42,8 +42,8 @@ test('Settings tab includes the demo-only real-data opt-in', () => {
   assert.match(settings, /id: 'devices'/);
   assert.match(settings, /id: 'globals'/);
   assert.match(settings, /Escape/);
-  assert.match(css, /\.settings-panel \{[^}]*overflow-y: auto/);
-  assert.match(css, /\.settings-footer \{[^}]*flex: none/);
+  assert.match(settings, /overflow-y-auto/);
+  assert.match(settings, /flex-none/);
 });
 
 test('Globals carries every global switch including absolute faders', () => {
@@ -63,7 +63,7 @@ test('Editor renders a reorderable chain for mouse, touch and pen', () => {
   assert.doesNotMatch(editor, /addEventListener\('lostpointercapture'/);
   assert.match(editor, /dragstart|dragover/);
   assert.match(editor, /PedalPopup/);
-  assert.match(css, /touch-action: pan-y/);
+  assert.match(editor, /touch-pan-y/);
 });
 
 test('Editor keeps scenes, stomps, knobs and preset actions', () => {
@@ -84,7 +84,7 @@ test('Live keeps the editable grid and all display item kinds', () => {
   assert.match(grid, /preset/);
   assert.match(grid, /data-grid|grid-template/);
   assert.match(grid, /event\.pointerType === 'mouse'/);
-  assert.match(css, /touch-action: none/);
+  assert.match(grid, /touch-none/);
 });
 
 test('expression faders recall values and slide relatively by default', () => {
@@ -96,9 +96,9 @@ test('expression faders recall values and slide relatively by default', () => {
   assert.match(fader, /pointercancel/);
   assert.doesNotMatch(fader, /lostpointercapture/);
   const popup = read('PedalPopup');
-  assert.match(popup, /z-index: 0/);
-  assert.match(popup, /z-index: 1/);
-  assert.match(popup, /overflow-y: auto/);
+  assert.match(popup, /z-0/);
+  assert.match(popup, /z-10/);
+  assert.match(popup, /overflow-y-auto/);
 });
 
 test('demo data stays sandboxed in the Svelte engine', () => {
