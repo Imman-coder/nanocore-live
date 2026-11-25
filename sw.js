@@ -1,5 +1,5 @@
 // Offline app shell for the installable web app. Never caches MIDI traffic.
-const CACHE = 'nanocore-live-v60';
+const CACHE = 'nanocore-live-v61';
 const SHELL = [
   '/',
   '/index.html',
@@ -33,6 +33,7 @@ const SHELL = [
   '/src/core/firmwareSpec.js',
   '/src/core/live.js',
   '/src/core/base.js',
+  '/src/core/capabilities.js',
   '/src/core/demoDevice.js',
   '/src/core/demoData.js',
   '/src/data/paramHelpers.js',
@@ -74,7 +75,7 @@ self.addEventListener('fetch', (event) => {
       }
       return response;
     } catch (error) {
-      const cached = await caches.match(request);
+      const cached = await caches.match(request, { ignoreSearch: true });
       if (cached) return cached;
       if (request.mode === 'navigate') return caches.match('/index.html');
       throw error;

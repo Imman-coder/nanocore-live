@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
 
 const root = new URL('../', import.meta.url);
 
@@ -24,6 +26,36 @@ test('the service worker caches the app shell and cleans old caches', () => {
   assert.match(sw, /activate/);
   assert.match(sw, /fetch/);
   assert.match(sw, /caches\.delete/);
+});
+
+test('offline requests fall back to the cache while online requests stay fresh', () => {
+  const sw = readFileSync(new URL('sw.js', root), 'utf8');
+  assert.match(sw, /await fetch\(request\)/);
+  assert.match(sw, /caches\.match\(request/);
+  assert.match(sw, /ignoreSearch: true/);
+  assert.match(sw, /request\.mode === 'navigate'/);
+});
+
+test('every local module import is precached for offline startup', () => {
+  const sw = readFileSync(new URL('sw.js', root), 'utf8');
+  const shell = new Set([...sw.matchAll(/'(\/[^']+)'/g)].map((match) => match[1]));
+  const rootPath = fileURLToPath(root);
+  const files = [];
+  const walk = (dir) => {
+    for (const entry of readdirSync(dir)) {
+      const file = path.join(dir, entry);
+      if (statSync(file).isDirectory()) walk(file);
+      else if (file.endsWith('.js')) files.push(file);
+    }
+  };
+  walk(fileURLToPath(new URL('src', root)));
+  for (const file of files) {
+    const source = readFileSync(file, 'utf8');
+    for (const match of source.matchAll(/(?:from\s+|import\s+)'(\.[^']+)'/g)) {
+      const target = '/' + path.relative(rootPath, path.resolve(path.dirname(file), match[1]));
+      assert.ok(shell.has(target), `${path.relative(rootPath, file)} imports ${target}, which must be in SHELL`);
+    }
+  }
 });
 
 test('the page links the manifest and registers the service worker', () => {
