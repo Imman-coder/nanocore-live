@@ -1,42 +1,32 @@
-// Firmware-aware effect type lists. AMP/CAB have no static list: their names
-// are read from the pedal's amp/IR slot metadata.
-import { BLOCK_BY_ID } from './spec.js';
-import { EXTRA_TYPES_12, REPLACE_PARAMS_12, MODIFIED_PITCH_PARAMS } from './firmwareSpec.js';
+// Firmware-aware effect type lookup. Version tables live in
+// src/data/firmware/original/<version>.js and modified/<version>.js.
+// Edit those files directly; this module only maps a firmware name to a table.
+import { VERSION as V1_10 } from '../data/firmware/original/1.10.js';
+import { VERSION as V1_11 } from '../data/firmware/original/1.11.js';
+import { VERSION as V1_12 } from '../data/firmware/original/1.12.js';
+import { VERSION as V1_2 } from '../data/firmware/original/1.2.js';
+import { VERSION as M1_10 } from '../data/firmware/modified/1.10.js';
+import { VERSION as M1_11 } from '../data/firmware/modified/1.11.js';
+import { VERSION as M1_12 } from '../data/firmware/modified/1.12.js';
+import { VERSION as M1_2 } from '../data/firmware/modified/1.2.js';
 
-export const FIRMWARE_OPTIONS = ['auto', '1.10', '1.11', '1.12', '1.2', '1.3.5', '1.2-modified'];
-const LATER_FIRMWARES = new Set(['1.12', '1.2', '1.3.5', '1.2-modified']);
-const LATER_MOD_TYPES = new Set([10, 11, 12, 17]);
-const MODIFIED = '1.2-modified';
-
-// A CC of null means the control is known by name but its MIDI controller has
-// not been captured yet. The editor must not send a CC for it.
-const range = (label, min, max, cc = null, unit = '', decimals = 2) => ({
-  kind: 'range', id: label.toLowerCase().replace(/[^a-z0-9]+/g, '_'), label, min, max, cc, unit, decimals,
-});
-const enumP = (label, options, cc = null) => ({
-  kind: 'enum', id: label.toLowerCase().replace(/[^a-z0-9]+/g, '_'), label, options, cc,
-});
-
-const OCTAVE_PARAMS = [
-  range('Dry', 0, 100, null, '%', 0),
-  range('-2 Oct', 0, 100, null, '%', 0),
-  range('-1 Oct', 0, 100, null, '%', 0),
-  range('+1 Oct', 0, 100, null, '%', 0),
-  range('+2 Oct', 0, 100, null, '%', 0),
-  range('Attack', 0, 2000, null, 'ms', 0),
-  range('Lowpass', 150, 18000, null, 'Hz', 0),
-  range('Detune', 0, 30, null, 'ct', 0),
-  enumP('Dry FX', ['Smooth', 'Smooth', 'Filter', 'Detune']),
-  enumP('Reson', ['Low', 'Medium', 'High', 'Peak']),
-  range('Level', 0, 100, null, '%', 0),
+export const FIRMWARE_OPTIONS = [
+  'auto', '1.10', '1.11', '1.12', '1.2', '1.3.5',
+  '1.10-modified', '1.11-modified', '1.12-modified', '1.2-modified',
 ];
 
-const UNIVIBE_PARAMS = [
-  range('Speed', 0, 100),
-  range('Depth', 0, 100),
-  range('Level', 0, 100),
-  enumP('Mode', ['Chorus', 'Vibrato']),
-];
+const TABLES = {
+  '1.10': V1_10,
+  '1.11': V1_11,
+  '1.12': V1_12,
+  '1.2': V1_2,
+  '1.3.5': V1_2,
+  '1.10-modified': M1_10,
+  '1.11-modified': M1_11,
+  '1.12-modified': M1_12,
+  '1.2-modified': M1_2,
+};
+const DEFAULT_TABLE = V1_10;
 
 export function resolveFirmware(state) {
   const chosen = state?.globals?.firmware;
@@ -44,70 +34,16 @@ export function resolveFirmware(state) {
   return state?.globals?.settingsLayout === 2 ? '1.2' : '1.10';
 }
 
-function modifiedTypes(blockId, types) {
-  return types.map((type) => {
-    if (blockId === 'fx2' && type.id === 5) {
-      return { ...type, slug: 'pitch', name: 'Octave', description: 'Modified firmware (1.12+): the Range slot carries Octave', params: MODIFIED_PITCH_PARAMS };
-    }
-    if (blockId === 'fx2' && type.slug === 'pitch') {
-      return { ...type, slug: 'octave', name: 'Octave', description: 'Modified firmware: 11-voice octave replacement', params: OCTAVE_PARAMS };
-    }
-    if (blockId === 'mod' && type.slug === 'velvet_vibrato') {
-      return { ...type, slug: 'univibe', name: 'UniVibe', description: 'Modified firmware: UniVibe replacement of Velvet Vibrato', params: UNIVIBE_PARAMS };
-    }
-    return type;
-  });
-}
-
-function reverb12(types) {
-  const order = ['room', 'plate', 'hall', 'concert', 'spring', 'shimmer', 'cloud'];
-  const bySlug = new Map(types.map((type) => [type.slug, type]));
-  const reordered = order.flatMap((slug, id) => {
-    const type = bySlug.get(slug);
-    return type ? [{ ...type, id, variant: id }] : [];
-  });
-  return [...reordered, ...types.filter((type) => !order.includes(type.slug))];
-}
-
-// Common parameters added in later firmware. AMP/CAB have no static type list,
-// so their firmware-specific controls live here instead of in a type's params.
-export function extraCommonParams(blockId, firmware) {
-  if (blockId === 'cab' && LATER_FIRMWARES.has(firmware)) {
-    return [range('Level', 0, 100, 67, '%', 0)];
-  }
-  return [];
+function tableFor(firmware) {
+  return TABLES[firmware] ?? DEFAULT_TABLE;
 }
 
 export function typesFor(blockId, firmware) {
-  if (blockId === 'amp' || blockId === 'cab') return [];
-  const block = BLOCK_BY_ID[blockId];
-  if (!block) return [];
-  const newer = LATER_FIRMWARES.has(firmware);
-  let types = block.types.filter((type) => {
-    if (!newer && blockId === 'mod' && LATER_MOD_TYPES.has(type.id)) return false;
-    if (!newer && blockId === 'fx2' && type.id === 11) return false;
-    return true;
-  });
-  if (newer) {
-    types = types.map((type) => {
-      const replacement = REPLACE_PARAMS_12[blockId]?.[type.slug];
-      return replacement ? { ...type, params: replacement } : type;
-    });
-    types = [...types, ...(EXTRA_TYPES_12[blockId] ?? [])];
-  }
-  if (newer && blockId === 'del') {
-    types = types.map((type) => ({
-      ...type,
-      params: type.params.map((param) =>
-        (param.label === 'Time' || param.label === 'Delay') ? { ...param, max: 2000 } : param),
-    }));
-  }
-  if (newer && blockId === 'eq') {
-    types = types.map((type) => ({
-      ...type,
-      params: [...type.params, range('Level', -12, 12, null, 'dB', 0)],
-    }));
-  }
-  if (firmware === MODIFIED) types = modifiedTypes(blockId, types);
-  return types;
+  const entry = tableFor(firmware)[blockId];
+  return entry ? structuredClone(entry.types) : [];
+}
+
+export function extraCommonParams(blockId, firmware) {
+  const entry = tableFor(firmware)[blockId];
+  return entry ? structuredClone(entry.common) : [];
 }

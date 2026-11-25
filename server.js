@@ -1,10 +1,13 @@
 // Tiny static server. localhost is a secure context, so Web MIDI works here.
 import http from 'node:http';
+import { existsSync } from 'node:fs';
 import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
+// Production serves the Vite build when present; `npm run dev` uses Vite itself.
+const servedRoot = existsSync(path.join(root, 'dist')) ? path.join(root, 'dist') : root;
 const port = Number(process.env.PORT ?? 8123);
 const types = {
   '.html': 'text/html; charset=utf-8',
@@ -19,8 +22,8 @@ const types = {
 http.createServer(async (req, res) => {
   try {
     const requestPath = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
-    let file = path.join(root, requestPath === '/' ? 'index.html' : requestPath);
-    if (!file.startsWith(root)) throw new Error('Forbidden');
+    let file = path.join(servedRoot, requestPath === '/' ? 'index.html' : requestPath);
+    if (!file.startsWith(servedRoot)) throw new Error('Forbidden');
     const info = await stat(file);
     if (info.isDirectory()) file = path.join(file, 'index.html');
     const body = await readFile(file);

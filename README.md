@@ -8,15 +8,20 @@ Unofficial and independent. Not endorsed by Livtra.
 
 ```bash
 cd /home/anvi/Projects/nanocore-live
-node server.js          # http://localhost:8123
-npm test                # node:test assertions, no dependencies
+npm install
+npm run dev             # Vite dev server
+npm test                # node:test assertions, no test dependencies
+npm run build           # Svelte bundle + generated service worker in dist/
+npm start               # serves dist/ when built, otherwise the source tree
 ```
+
+The UI is Svelte 4 + Vite. `src/lib/engine.js` keeps the original state/transport/protocol logic and exposes an `app` store plus `ctx` actions; `src/lib/components/` contains the views. `src/core/**`, `src/data/**` and `src/transports/**` are shared unchanged. Firmware-specific FX parameters are explicit tables: one file per version in `src/data/firmware/original/` and `src/data/firmware/modified/`. Each modified file imports its original and replaces only the FX blocks whose types changed. Edit those files directly, not `src/core/versions.js`.
 
 `localhost` is a secure context, so Web MIDI works without HTTPS. For a phone/tablet on the network, serve over HTTPS — Web MIDI will not work over plain HTTP from a remote host.
 
 ## Install
 
-Open the app in Chrome/Edge, then use the browser menu's **Install app** / **Add to Home screen**. The manifest declares `display: standalone`, the 192 px and 512 px icons are in `icons/`, and `sw.js` precaches the whole app shell (HTML, CSS, every JS module, icons and manifest). Online it fetches fresh assets and refreshes the cache; with no internet it serves the cached shell, so the installed app — including demo mode — still opens. Load it once while online before going offline. Installation requires a secure context (localhost or HTTPS). A test walks every local module import and fails if a new module is not added to `sw.js`'s `SHELL`.
+Open the app in Chrome/Edge, then use the browser menu's **Install app** / **Add to Home screen**. The manifest declares `display: standalone`, the 192 px and 512 px icons are in `icons/`, and `sw.js` is generated from every file in `dist/` by `npm run build` (no hand-maintained SHELL list), so online loads stay fresh and offline loads serve the cached shell. Online it fetches fresh assets and refreshes the cache; with no internet it serves the cached shell, so the installed app — including demo mode — still opens. Load it once while online before going offline. Installation requires a secure context (localhost or HTTPS). A test checks that every local import resolves and that the generated worker keeps network-first/cache-fallback behaviour.
 
 The top bar has a fullscreen toggle (⛶ / ⤡) for an uncluttered performance view. Tap **TAP** in the top bar (or the virtual button in Live) to set BPM; the top bar shows the BPM and time signature. MOD writes use the documented CCs (or per-parameter SysEx for SysEx-only controls and when FX2 pitch/wah owns CC68-73). Extra "Level" knobs that the pedal does not store are no longer shown. Globals controls the subdivision, the delay-sync switch, and the tap-tempo MIDI trigger (default CC 87, changeable or Learn-able like the stomps and scenes). The NANOCORE has no tap-tempo feature of its own, so the browser writes the computed Time/Delay milliseconds through the normal parameter path. In the Editor, any block with a Time/Delay knob (normally Delay) has a per-preset **Sync with tempo** switch; enabling it hides that knob and shows a delay subdivision (quarter, eighth, dotted eighth, sixteenth...), and only opted-in blocks are written when the tempo changes.
 

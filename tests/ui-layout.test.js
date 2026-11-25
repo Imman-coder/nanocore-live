@@ -2,275 +2,107 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-const startSource = readFileSync(new URL('../src/ui/start.js', import.meta.url), 'utf8');
-const css = readFileSync(new URL('../styles.css', import.meta.url), 'utf8');
-const settingsSource = readFileSync(new URL('../src/ui/settings.js', import.meta.url), 'utf8');
+const read = (name) => readFileSync(new URL(`../src/lib/components/${name}.svelte`, import.meta.url), 'utf8');
+const app = readFileSync(new URL('../src/App.svelte', import.meta.url), 'utf8');
+const engine = readFileSync(new URL('../src/lib/engine.js', import.meta.url), 'utf8');
+const css = readFileSync(new URL('../src/app.css', import.meta.url), 'utf8');
+const start = read('Start');
+const settings = read('Settings');
+const globals = read('GlobalsTab');
+const editor = read('Editor');
+const live = read('Live');
+const grid = read('LiveGrid');
+const fader = read('ExpressionFader');
 
-test('the top bar has a settings popup and mode buttons', () => {
-  assert.match(html, /id="settings-toggle"/);
-  assert.match(html, /aria-controls="topbar-menu"/);
-  assert.match(html, /id="topbar-menu" class="settings-modal"/);
-  assert.match(html, /id="settings-close"/);
-  assert.match(html, /id="panel-toggle"/);
-  assert.match(html, /id="settings-toggle"/);
-  assert.match(html, /id="connect"/);
-  assert.match(html, /id="top-status"/);
-  assert.match(html, /id="fullscreen-toggle"/);
-  assert.match(css, /#fullscreen-toggle \{ margin-left: auto; \}/);
-  assert.match(css, /\.menu-toggle \{ display: inline-flex/);
-  assert.match(css, /\.settings-modal \.modal-box \{ width: min\(920px, 94vw\); height: min\(720px, 88vh\);/);
-  assert.match(css, /\.settings-panel \{[^}]*flex: 1; overflow-y: auto; min-height: 0;/);
-  assert.match(css, /body\.start-mode \.tempo \{ display: none; \}/);
-  assert.match(css, /\.live-column \{ display: grid;/);
-  assert.doesNotMatch(css, /\.live-column > \* \{ flex: 1 1 0/);
-  assert.match(css, /\.settings-footer \{ flex: none;/);
-  assert.match(css, /body\.start-mode #sidebar \{ display: none; \}/);
-  assert.match(css, /body\.start-mode:not\(\.connected\) #mode-switch \{ display: none; \}/);
+test('the Svelte shell owns mode switching, settings, log and toast', () => {
+  assert.match(app, /class:start-mode/);
+  assert.match(app, /class:demo-mode/);
+  assert.match(app, /<Settings open=/);
+  assert.match(app, /class="logbar"/);
+  assert.match(app, /class="toast"/);
+  assert.match(engine, /export const app = writable/);
+  assert.match(engine, /export const ctx = \{/);
 });
 
-test('settings has connection, devices and globals tabs', () => {
-  assert.match(settingsSource, /id: 'connection'/);
-  assert.match(settingsSource, /id: 'devices'/);
-  assert.match(settingsSource, /id: 'globals'/);
+test('Start offers direct demo entry and full transport setup', () => {
+  assert.match(start, /ctx\.connect\('demo'\)/);
+  assert.match(start, /value="webmidi"/);
+  assert.match(start, /value="webbluetooth"/);
+  assert.match(start, /value="demo"/);
+  assert.match(start, /data-port-output|data-port-controller/);
+  assert.match(start, /fetch|Fetch/);
+  assert.match(start, /onOpenGlobals/);
 });
 
-test('start port rows constrain long device names', () => {
-  assert.match(startSource, /class="port-row"/);
-  assert.match(css, /\.port-id b \{[^}]*text-overflow: ellipsis/);
+test('Settings tab includes the demo-only real-data opt-in', () => {
+  assert.match(settings, /data-setting="demo-use-real-data"/);
+  assert.match(settings, /ctx\.setDemoUseRealData/);
+  assert.match(settings, /\$app\.demo \?/);
+  assert.match(settings, /id: 'connection'/);
+  assert.match(settings, /id: 'devices'/);
+  assert.match(settings, /id: 'globals'/);
+  assert.match(settings, /Escape/);
+  assert.match(css, /\.settings-panel \{[^}]*overflow-y: auto/);
+  assert.match(css, /\.settings-footer \{[^}]*flex: none/);
 });
 
-test('Live grid supports preset-change display items', () => {
-  const live = readFileSync(new URL('../src/ui/live.js', import.meta.url), 'utf8');
-  assert.match(live, /Preset · Dropdown/);
-  assert.match(live, /recall-preset/);
-  const events = readFileSync(new URL('../src/ui/ui-events.js', import.meta.url), 'utf8');
-  assert.match(events, /dataset\.presetSelect/);
-});
-
-test('Settings holds sidebar and fit-screen toggles and phone editing works', () => {
-  const settings = readFileSync(new URL('../src/ui/settings.js', import.meta.url), 'utf8');
-  assert.match(settings, /setLiveLayoutOption\('hideSidebar'/);
-  assert.match(settings, /setLiveLayoutOption\('fitScreen'/);
-  const live = readFileSync(new URL('../src/ui/live.js', import.meta.url), 'utf8');
-  assert.match(live, /pointerType/);
-  assert.match(css, /\.live-grid\.editing \.live-grid-cell \{[^}]*touch-action: none/);
-});
-
-test('Live edit is reached via gestures or Settings', () => {
-  const live = readFileSync(new URL('../src/ui/live.js', import.meta.url), 'utf8');
-  assert.doesNotMatch(live, />Edit layout</);
-  const settings = readFileSync(new URL('../src/ui/settings.js', import.meta.url), 'utf8');
-  assert.match(settings, /data-action="edit-live-layout"/);
-});
-
-test('emptying a grid tile removes its span', () => {
-  const app = readFileSync(new URL('../src/ui/app.js', import.meta.url), 'utf8');
-  assert.match(app, /patch\.kind === 'empty'/);
-});
-
-test('Live grid items can be dragged between cells', () => {
-  const live = readFileSync(new URL('../src/ui/live.js', import.meta.url), 'utf8');
-  assert.match(live, /dragstart/);
-  assert.match(live, /moveLiveGridItem/);
-  const app = readFileSync(new URL('../src/ui/app.js', import.meta.url), 'utf8');
-  assert.match(app, /moveLiveGridItem/);
-});
-
-test('grid tiles fill their cells and row counts are uncapped', () => {
-  assert.match(css, /\.live-grid-cell > \.stomp \{[^}]*width: 100%[^}]*height: 100%/);
-  const live = readFileSync(new URL('../src/ui/live.js', import.meta.url), 'utf8');
-  assert.match(live, /minmax\(72px, 1fr\)/);
-});
-
-test('Settings can hide Live header and assignments button', () => {
-  const settings = readFileSync(new URL('../src/ui/settings.js', import.meta.url), 'utf8');
-  assert.match(settings, /setGlobalSetting\('hideLivePresetLabel'/);
-  assert.match(settings, /setGlobalSetting\('hideAssignmentsButton'/);
-  const live = readFileSync(new URL('../src/ui/live.js', import.meta.url), 'utf8');
-  assert.match(live, /hideLivePresetLabel/);
-  assert.match(live, /hideAssignmentsButton/);
-});
-
-test('fit mode never shrinks the board wrapper', () => {
-  const live = readFileSync(new URL('../src/ui/live.js', import.meta.url), 'utf8');
-  assert.doesNotMatch(live, /wrap\.style\.width\s*=/);
-  assert.doesNotMatch(live, /wrap\.style\.height\s*=/);
-  assert.match(live, /transformOrigin = 'center center'/);
-});
-
-test('preset display items use the fetched preset names', () => {
-  const live = readFileSync(new URL('../src/ui/live.js', import.meta.url), 'utf8');
-  assert.match(live, /Preset \$\{number\} · \$\{ctx\.presetLabel\(number\)\}/);
-  assert.match(live, /escapeHtml\(ctx\.presetLabel\(number\)\)/);
-});
-
-test('presets are limited to the 64 slots on the pedal', () => {
-  const live = readFileSync(new URL('../src/ui/live.js', import.meta.url), 'utf8');
-  assert.match(live, /number <= 64/);
-  const editor = readFileSync(new URL('../src/ui/editor.js', import.meta.url), 'utf8');
-  assert.match(editor, /63, 64/);
-  assert.match(editor, /\$\{n\} · \$\{escapeHtml\(ctx\.presetLabel\(n\)\)\}/);
-});
-
-test('expression assignment range uses percentages', () => {
-  const popup = readFileSync(new URL('../src/ui/pedal-popup.js', import.meta.url), 'utf8');
-  assert.match(popup, /Pedal min \(%\)/);
-  assert.match(popup, /Pedal max \(%\)/);
-  assert.match(popup, /Parameter min \(%\)/);
-  assert.match(popup, /Parameter max \(%\)/);
-  assert.match(popup, /expressionPercentToRaw\(outMinPercent\)/);
-});
-
-test('Globals can assign an expression pedal to preset volume', () => {
-  const globals = readFileSync(new URL('../src/ui/globals.js', import.meta.url), 'utf8');
-  const app = readFileSync(new URL('../src/ui/app.js', import.meta.url), 'utf8');
+test('Globals carries every global switch including absolute faders', () => {
+  assert.match(globals, /data-global="absolute-expression"/);
   assert.match(globals, /data-global="volume-pedal"/);
-  assert.match(app, /expression-volume/);
+  assert.match(globals, /data-global="interactive-live"/);
+  assert.match(globals, /data-global="firmware"/);
+  assert.match(globals, /data-global="midi-channel"/);
+  assert.match(globals, /data-global="recall-method"/);
+  assert.match(globals, /data-global="tempo-sync"/);
 });
 
-test('Editor sidebar lists only edited presets', () => {
-  const app = readFileSync(new URL('../src/ui/app.js', import.meta.url), 'utf8');
-  assert.match(app, /isPresetEdited\(state, number\)/);
-  assert.match(app, /Edited presets/);
+test('Editor renders a reorderable chain for mouse, touch and pen', () => {
+  assert.match(editor, /chainRowAt/);
+  assert.match(editor, /setChainOrder/);
+  assert.match(editor, /event\.pointerType === 'mouse'/);
+  assert.doesNotMatch(editor, /addEventListener\('lostpointercapture'/);
+  assert.match(editor, /dragstart|dragover/);
+  assert.match(editor, /PedalPopup/);
+  assert.match(css, /touch-action: pan-y/);
 });
 
-test('vertical expression fill is anchored to the bottom', () => {
-  assert.match(css, /\.vertical-expression \.expression-meter \{[^}]*position: relative/);
-  assert.match(css, /\.vertical-expression \.expression-meter i \{[^}]*position: absolute; bottom: 0/);
+test('Editor keeps scenes, stomps, knobs and preset actions', () => {
+  assert.match(editor, /selectScene/);
+  assert.match(editor, /storeScene/);
+  assert.match(editor, /setBlockStomp/);
+  assert.match(editor, /<Knob/);
+  assert.match(editor, /renamePresetOnDevice/);
+  assert.match(editor, /savePreset/);
 });
 
-test('expression faders hold touch drags and show vertical fill', () => {
-  assert.match(css, /\.expression-meter\.interactive \{[^}]*touch-action: none/);
-  const live = readFileSync(new URL('../src/ui/live.js', import.meta.url), 'utf8');
-  // A snapshot re-render detaches the meter, so lostpointercapture must not end the drag.
-  assert.match(live, /pointercancel/);
-  assert.doesNotMatch(live, /lostpointercapture/);
-  assert.match(live, /fill\.style\.width = '100%'/);
-});
-
-test('expression faders are always interactive and update both axes', () => {
-  const live = readFileSync(new URL('../src/ui/live.js', import.meta.url), 'utf8');
-  const app = readFileSync(new URL('../src/ui/app.js', import.meta.url), 'utf8');
-  assert.match(live, /expression-meter interactive/);
-  assert.doesNotMatch(app, /interactiveLive && !fullTouch/);
-  assert.match(app, /vertical \? 'height' : 'width'/);
-});
-
-test('tall expression cells become vertical faders', () => {
-  const live = readFileSync(new URL('../src/ui/live.js', import.meta.url), 'utf8');
-  assert.match(live, /vertical-expression/);
-  assert.match(css, /\.vertical-expression \.expression-touch/);
-  assert.match(live, /rect\.bottom - clientY/);
-});
-
-test('full-touch expression control is rendered as a large pad', () => {
-  assert.match(css, /\.expression-touch \{/);
+test('Live keeps the editable grid and all display item kinds', () => {
+  assert.match(live, /toggleLiveEdit/);
+  assert.match(grid, /expression/);
+  assert.match(grid, /scene/);
+  assert.match(grid, /stomp/);
+  assert.match(grid, /preset/);
+  assert.match(grid, /data-grid|grid-template/);
+  assert.match(grid, /event\.pointerType === 'mouse'/);
   assert.match(css, /touch-action: none/);
 });
 
-test('the log bar can be hidden and fit mode reserves its space', () => {
-  assert.match(css, /body\.hide-logbar #logbar \{ display: none; \}/);
-  assert.match(css, /body\.live-fit-screen #content \{[^}]*display: flex/);
-  assert.match(css, /body\.live-fit-screen \.live-board-wrap \{ flex: 1/);
-  const live = readFileSync(new URL('../src/ui/live.js', import.meta.url), 'utf8');
-  assert.match(live, /export function fitLiveBoard/);
-  assert.match(live, /gridTemplateRows/);
+test('expression faders recall values and slide relatively by default', () => {
+  assert.match(fader, /expressionInitialValue/);
+  assert.match(fader, /expressionRawFromRelative/);
+  assert.match(fader, /absoluteExpression/);
+  assert.match(fader, /aria-valuenow/);
+  assert.match(fader, /ArrowRight|ArrowLeft/);
+  assert.match(fader, /pointercancel/);
+  assert.doesNotMatch(fader, /lostpointercapture/);
+  const popup = read('PedalPopup');
+  assert.match(popup, /z-index: 0/);
+  assert.match(popup, /z-index: 1/);
+  assert.match(popup, /overflow-y: auto/);
 });
 
-test('fit-to-screen Live mode has no scrollable content', () => {
-  assert.match(css, /body\.live-fit-screen #content \{[^}]*overflow: hidden/);
-});
-
-test('live slots have stretch weights and tall containers stack vertically', () => {
-  const layout = readFileSync(new URL('../src/ui/live-layout.js', import.meta.url), 'utf8');
-  assert.match(layout, /data-layout-grow/);
-  assert.match(css, /\.live-row\.is-vertical/);
-  assert.match(css, /\.layout-slots\.row\.is-vertical/);
-});
-
-test('the live layout editor is large and mirrors row/column structure', () => {
-  assert.match(css, /\.modal-box\.layout-modal-box \{ width: 94vw;/);
-  assert.match(css, /\.layout-slots\.column \{/);
-});
-
-test('demo mode can be started without a pedal and reaches both views', () => {
-  const app = readFileSync(new URL('../src/ui/app.js', import.meta.url), 'utf8');
-  assert.match(app, /createDemoTransport/);
-  assert.match(app, /get demo\(\)/);
-  assert.match(app, /exitDemo/);
-  assert.match(startSource, /data-start="demo"/);
-  assert.match(startSource, /data-start="exit-demo"/);
-  assert.match(startSource, /value="demo"/);
-  assert.match(settingsSource, /value="demo"/);
-  assert.match(css, /body\.demo-mode/);
-  const sw = readFileSync(new URL('../sw.js', import.meta.url), 'utf8');
-  assert.match(sw, /src\/core\/demoDevice\.js/);
-  assert.match(sw, /src\/transports\/demo\.js/);
-});
-
-test('Live expression faders start from the value of their assigned parameter', () => {
-  const live = readFileSync(new URL('../src/ui/live.js', import.meta.url), 'utf8');
-  assert.match(live, /expressionInitialValue\(pedal\.id\)/);
-  assert.doesNotMatch(live, /aria-valuenow="0"/);
-  const app = readFileSync(new URL('../src/ui/app.js', import.meta.url), 'utf8');
-  assert.match(app, /expressionInitialValue\(/);
-  const core = readFileSync(new URL('../src/core/live.js', import.meta.url), 'utf8');
-  assert.match(core, /export function expressionRawForNormalized/);
-});
-
-test('a pedal assigned to global preset volume is shown as occupied in the Editor', () => {
-  const editor = readFileSync(new URL('../src/ui/editor.js', import.meta.url), 'utf8');
-  assert.match(editor, /volumePedal === pedal\.id/);
-  assert.match(editor, /Preset volume/);
-  const popup = readFileSync(new URL('../src/ui/pedal-popup.js', import.meta.url), 'utf8');
-  assert.match(popup, /globalVolume/);
-});
-
-test('demo mode sandboxes saved data with a demo-only opt-in for real settings', () => {
-  const app = readFileSync(new URL('../src/ui/app.js', import.meta.url), 'utf8');
-  assert.match(app, /demoUseRealData/);
-  assert.match(app, /get demoUseRealData/);
-  assert.match(app, /saveWorkingState/);
-  assert.match(app, /sandboxState/);
-  assert.match(app, /workingStorage/);
-  assert.match(settingsSource, /demo-use-real-data/);
-  assert.match(settingsSource, /ctx\.demo/);
-  assert.match(startSource, /connect\('demo'\)/);
-});
-
-test('FX chain rows can be reordered with touch and pen pointers', () => {
-  const editor = readFileSync(new URL('../src/ui/editor.js', import.meta.url), 'utf8');
-  assert.match(editor, /pointerType === 'mouse'/);
-  assert.match(editor, /setPointerCapture/);
-  assert.match(editor, /elementFromPoint/);
-  assert.match(editor, /beginChainDrag/);
-  assert.match(editor, /pointercancel/);
-  assert.doesNotMatch(editor, /pointerType === 'touch'/);
-  assert.match(css, /\.chain-row \{[^}]*touch-action: pan-y/);
-});
-
-test('vertical expression faders keep a usable height and survive re-renders mid-drag', () => {
-  const live = readFileSync(new URL('../src/ui/live.js', import.meta.url), 'utf8');
-  assert.match(live, /draggedExpressionId/);
-  assert.match(live, /querySelector\(`\[data-expression-meter=/);
-  assert.doesNotMatch(live, /draggedExpression = null/);
-  assert.match(css, /\.live-grid-cell\.vertical-expression[^}]*min-height: 24px/);
-});
-
-test('FX chain touch drag survives reinsertion and accepts gaps between rows', () => {
-  const editor = readFileSync(new URL('../src/ui/editor.js', import.meta.url), 'utf8');
-  assert.doesNotMatch(editor, /lostpointercapture/);
-  assert.match(editor, /function chainRowAt/);
-  assert.match(editor, /chainRowAt\(event\.clientX, event\.clientY\)/);
-});
-
-test('expression faders slide relatively by default with an absolute global option', () => {
-  const live = readFileSync(new URL('../src/ui/live.js', import.meta.url), 'utf8');
-  const globals = readFileSync(new URL('../src/ui/globals.js', import.meta.url), 'utf8');
-  const store = readFileSync(new URL('../src/core/store.js', import.meta.url), 'utf8');
-  assert.match(live, /expressionRawFromRelative/);
-  assert.match(live, /absoluteExpression/);
-  assert.match(globals, /data-global="absolute-expression"/);
-  assert.match(store, /absoluteExpression/);
+test('demo data stays sandboxed in the Svelte engine', () => {
+  assert.match(engine, /sandboxState/);
+  assert.match(engine, /workingStorage/);
+  assert.match(engine, /demoUseRealData/);
+  assert.match(engine, /setDemoUseRealData/);
 });

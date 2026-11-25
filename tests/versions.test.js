@@ -2,6 +2,38 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { resolveFirmware, typesFor, extraCommonParams } from '../src/core/versions.js';
 import { createDefaultState } from '../src/core/store.js';
+import { readFileSync } from 'node:fs';
+
+test('effect parameters live in explicit per-version, per-block tables', () => {
+  const source = readFileSync(new URL('../src/core/versions.js', import.meta.url), 'utf8');
+  assert.match(source, /data\/firmware\/original\/1\.10\.js/);
+  assert.match(source, /data\/firmware\/original\/1\.12\.js/);
+  assert.match(source, /data\/firmware\/modified\/1\.10\.js/);
+  assert.match(source, /data\/firmware\/modified\/1\.2\.js/);
+  assert.doesNotMatch(source, /REPLACE_PARAMS_12|EXTRA_TYPES_12|LATER_FIRMWARES|if \(newer\)/);
+  for (const version of ['1.10', '1.11', '1.12', '1.2']) {
+    for (const folder of ['original', 'modified']) {
+      const file = readFileSync(new URL(`../src/data/firmware/${folder}/${version}.js`, import.meta.url), 'utf8');
+      assert.ok(file.includes('VERSION'), `${folder}/${version}.js exports VERSION`);
+    }
+  }
+  const modified = readFileSync(new URL('../src/data/firmware/modified/1.2.js', import.meta.url), 'utf8');
+  assert.match(modified, /import \{ VERSION as ORIGINAL \}/);
+  assert.match(modified, /_REPLACEMENTS\[type\.id\] \?\? type/);
+});
+
+test('every original version has a modified variant that replaces only changed types', () => {
+  for (const version of ['1.10', '1.11', '1.12', '1.2']) {
+    const original = typesFor('fx2', version);
+    const modified = typesFor('fx2', `${version}-modified`);
+    assert.equal(modified.length, original.length, `${version} fx2 type count`);
+    assert.equal(modified.find((type) => type.id === 5).slug, 'pitch', `${version} range becomes octave`);
+    assert.equal(modified.find((type) => type.id === 8).slug, 'octave', `${version} pitch becomes octave`);
+    assert.notDeepEqual(modified.find((type) => type.id === 5).params, original.find((type) => type.id === 5).params);
+  }
+  assert.equal(typesFor('mod', '1.10-modified').some((type) => type.slug === 'univibe'), false);
+  assert.equal(typesFor('mod', '1.2-modified').some((type) => type.slug === 'univibe'), true);
+});
 
 test('auto firmware follows the settings layout hint', () => {
   const state = createDefaultState();

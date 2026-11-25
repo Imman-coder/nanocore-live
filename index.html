@@ -9,59 +9,10 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" type="image/png" href="/icons/icon-192.png">
   <link rel="apple-touch-icon" href="/icons/icon-192.png">
-  <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-  <header id="topbar">
-    <div class="brand">NANOCORE <b>LIVE</b></div>
-    <nav id="mode-switch" aria-label="Panel">
-      <button id="panel-toggle" class="primary" title="Long-press or right-click in Live to arrange the board">Live</button>
-    </nav>
-    <div class="tempo">
-      <button id="tap-tempo" title="Tap to set BPM and sync delays">TAP</button>
-      <span id="bpm-count" class="bpm-count">—</span>
-      <select id="time-signature" aria-label="Time signature">
-        <option value="4/4">4/4</option><option value="3/4">3/4</option><option value="2/4">2/4</option>
-        <option value="6/8">6/8</option><option value="9/8">9/8</option><option value="12/8">12/8</option>
-        <option value="3/8">3/8</option>
-      </select>
-    </div>
-    <span id="top-status" class="status offline" aria-live="polite">Disconnected</span>
-    <button id="fullscreen-toggle" aria-label="Enter fullscreen" title="Fullscreen">⛶</button>
-    <button id="settings-toggle" class="menu-toggle" aria-label="Open settings" aria-controls="topbar-menu" aria-expanded="false">⚙</button>
-  </header>
-
-  <main>
-    <aside id="sidebar"></aside>
-    <section id="content"></section>
-  </main>
-
-  <footer id="logbar">
-    <span class="log-title">MIDI</span>
-    <div id="log"></div>
-    <button id="clear-log" class="ghost small">Clear</button>
-  </footer>
-
-  <div id="modal" hidden></div>
-  <div id="topbar-menu" class="settings-modal" hidden>
-    <div class="modal-box">
-      <div class="modal-head"><h2>Settings</h2><button id="settings-close" class="small">Close</button></div>
-      <div class="transport">
-        <button id="connect">Connect</button>
-        <span id="status" class="status offline">Disconnected</span>
-      </div>
-      <label class="small" for="transport-kind">Transport</label>
-      <select id="transport-kind" aria-label="Transport">
-        <option value="webmidi">USB MIDI / paired Bluetooth MIDI</option>
-        <option value="webbluetooth">Direct Bluetooth (Web Bluetooth)</option>
-      </select>
-      <button id="open-devices" class="ghost">MIDI devices</button>
-      <button id="open-globals" class="ghost">Globals</button>
-      <p class="muted small" id="capability-hint"></p>
-    </div>
-  </div>
-
-  <script type="module" src="/src/ui/app.js"></script>
+  <div id="app"></div>
+  <script type="module" src="/src/main.js"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
