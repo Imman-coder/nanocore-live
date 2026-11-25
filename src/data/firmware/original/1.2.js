@@ -489,6 +489,7 @@ export const VERSION = {
           P({ kind: 'range', id: 'feedback', label: 'Feedback', cc: 75, min: 0, max: 95, default: 48 }),
           P({ kind: 'range', id: 'age', label: 'Age', cc: 76, min: 0, max: 100, default: 65 }),
           P({ kind: 'range', id: 'mix', label: 'Mix', cc: 77, min: 0, max: 100, default: 40 }),
+          P({ kind: 'enum', id: 'pingpong', label: 'PingPong', cc: null, sysexParamIndex: 4, options: ['Off', 'On'], default: 0 }),
         ],
       }),
       T({
@@ -498,6 +499,7 @@ export const VERSION = {
           P({ kind: 'range', id: 'time', label: 'Time', cc: 74, min: 0.1, max: 3000, unit: 'ms', format: 'time', default: 350 }),
           P({ kind: 'range', id: 'feedback', label: 'Feedback', cc: 75, min: 0, max: 95, default: 32 }),
           P({ kind: 'range', id: 'mix', label: 'Mix', cc: 76, min: 0, max: 100, default: 32 }),
+          P({ kind: 'enum', id: 'pingpong', label: 'PingPong', cc: null, sysexParamIndex: 3, options: ['Off', 'On'], default: 0 }),
         ],
       }),
       T({
@@ -512,6 +514,7 @@ export const VERSION = {
           P({ kind: 'range', id: 'release', label: 'Release', cc: 79, min: 10, max: 2000, unit: 'ms', default: 200 }),
           P({ kind: 'range', id: 'filter', label: 'Filter', cc: null, sysexParamIndex: 6, min: 0, max: 100, default: 55 }),
           P({ kind: 'range', id: 'mix', label: 'Mix', cc: null, sysexParamIndex: 7, min: 0, max: 100, default: 40 }),
+          P({ kind: 'enum', id: 'pingpong', label: 'PingPong', cc: null, sysexParamIndex: 8, options: ['Off', 'On'], default: 0 }),
         ],
       }),
       T({
@@ -522,6 +525,7 @@ export const VERSION = {
           P({ kind: 'range', id: 'feedback', label: 'Feedback', cc: 75, min: 0, max: 95, default: 30 }),
           P({ kind: 'range', id: 'interval', label: 'Interval', cc: 76, min: -12, max: 12, unit: 'st', default: 12 }),
           P({ kind: 'range', id: 'mix', label: 'Mix', cc: 77, min: 0, max: 100, default: 40 }),
+          P({ kind: 'enum', id: 'pingpong', label: 'PingPong', cc: null, sysexParamIndex: 4, options: ['Off', 'On'], default: 0 }),
         ],
       }),
       T({
@@ -531,6 +535,7 @@ export const VERSION = {
           P({ kind: 'range', id: 'time', label: 'Time', cc: 74, min: 0.1, max: 3000, unit: 'ms', format: 'time', default: 600 }),
           P({ kind: 'range', id: 'feedback', label: 'Feedback', cc: 75, min: 0, max: 95, default: 25 }),
           P({ kind: 'range', id: 'mix', label: 'Mix', cc: 76, min: 0, max: 100, default: 50 }),
+          P({ kind: 'enum', id: 'pingpong', label: 'PingPong', cc: null, sysexParamIndex: 3, options: ['Off', 'On'], default: 0 }),
         ],
       }),
       T({
@@ -542,6 +547,7 @@ export const VERSION = {
           P({ kind: 'range', id: 'bit_depth', label: 'Bit Depth', cc: 76, min: 4, max: 16, unit: 'bit', default: 8 }),
           P({ kind: 'range', id: 'lofi_mix', label: 'LoFi Mix', cc: 77, min: 0, max: 100, default: 70 }),
           P({ kind: 'range', id: 'mix', label: 'Mix', cc: 78, min: 0, max: 100, default: 40 }),
+          P({ kind: 'enum', id: 'pingpong', label: 'PingPong', cc: null, sysexParamIndex: 5, options: ['Off', 'On'], default: 0 }),
         ],
       }),
       T({
@@ -553,6 +559,7 @@ export const VERSION = {
           P({ kind: 'range', id: 'smear', label: 'Smear', cc: 76, min: 0, max: 100, default: 68 }),
           P({ kind: 'range', id: 'filter', label: 'Filter', cc: 77, min: 0, max: 100, default: 42 }),
           P({ kind: 'range', id: 'mix', label: 'Mix', cc: 78, min: 0, max: 100, default: 40 }),
+          P({ kind: 'enum', id: 'pingpong', label: 'PingPong', cc: null, sysexParamIndex: 5, options: ['Off', 'On'], default: 0 }),
         ],
       }),
       T({
@@ -564,6 +571,7 @@ export const VERSION = {
           P({ kind: 'range', id: 'mod_depth', label: 'Mod Depth', cc: 76, min: 0, max: 20, unit: 'ms', default: 4 }),
           P({ kind: 'range', id: 'mod_rate', label: 'Mod Rate', cc: 77, min: 0.05, max: 5, unit: 'Hz', decimals: 2, default: 1 }),
           P({ kind: 'range', id: 'mix', label: 'Mix', cc: 78, min: 0, max: 100, default: 40 }),
+          P({ kind: 'enum', id: 'pingpong', label: 'PingPong', cc: null, sysexParamIndex: 5, options: ['Off', 'On'], default: 0 }),
         ],
       }),
     ],

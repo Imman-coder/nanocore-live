@@ -154,6 +154,20 @@ test('modified firmware replaces FX2 Pitch (id 8), not FX2 Range (id 5)', () => 
 });
 
 
+test('firmware 1.2 delay types add a PingPong on/off control', () => {
+  const types = typesFor('del', '1.2');
+  assert.equal(types.length, 8);
+  for (const type of types) {
+    const pingpong = type.params.find((param) => param.id === 'pingpong');
+    assert.ok(pingpong, `${type.slug} has PingPong`);
+    assert.equal(pingpong.kind, 'enum');
+    assert.deepEqual(pingpong.options, ['Off', 'On']);
+    assert.equal(pingpong.cc, null);
+    assert.equal(pingpong.sysexParamIndex, type.params.length - 1);
+  }
+  assert.equal(typesFor('del', '1.10').some((type) => type.params.some((param) => param.id === 'pingpong')), false);
+});
+
 test('delay time limits follow the hardware catalogue', () => {
   for (const firmware of ['1.2', '1.3.5', '1.2+uv+oct']) {
     for (const type of typesFor('del', firmware)) {

@@ -18,7 +18,7 @@ catalogue). Version gates come from `docs/FIRMWARE_VERSION_HISTORY.md` §§3–4
 | 1.10 | Baseline: FX1 0–3, FX2 0–10, MOD 0–4, 4-param Duck, Pitch ±12 st, Spring CC88 "Mod", no CAB Level, no Synth |
 | 1.11 | No FX/parameter change except FX2 Motion Wah (id 11) [FW] |
 | 1.12 | Pitch ±24 st, Spring CC88 "Tone", Duck 8 params, CAB Level on CC67, MOD ids 10/11/12/17 |
-| 1.2 | Synth Mode (10 voices) + FX1 ids 4–11 / FX2 ids 12–21 [REL]+[FW]; id/param values confirmed under 1.3.5, exact boundary unpinned |
+| 1.2 | Synth Mode (10 voices) + FX1 ids 4–11 / FX2 ids 12–21 [REL]+[FW]; all delay types add a SysEx-only PingPong Off/On control; id/param values confirmed under 1.3.5, exact boundary unpinned |
 
 `patches.js` defines the community patches once; `modified/<version>.js` combines an original
 with those patches. UniVibe is mandatory for every modified build; Octave is optional and only
