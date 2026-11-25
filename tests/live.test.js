@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { stompActive, toggleCc, sceneStored, sceneBlockParticipates, expressionBytes, expressionRawToPercent, expressionPercentToRaw, normalizedExpression } from '../src/core/live.js';
+import { stompActive, toggleCc, sceneStored, sceneBlockParticipates, expressionBytes, expressionRawToPercent, expressionPercentToRaw, normalizedExpression, expressionRawForNormalized, expressionRawFromRelative } from '../src/core/live.js';
 import { captureBase, baseForPreset, overrideBase } from '../src/core/base.js';
 import { connectionHint } from '../src/core/capabilities.js';
 
@@ -63,6 +63,36 @@ test('a live expression control maps its value through the assignment window', (
   assert.deepEqual(expressionBytes(inverted, 1, 0, 0), [0xb0, 50, 127]);
 });
 
+test('expression recall is the inverse of the live expression mapping', () => {
+  const mapping = {
+    inputMin: expressionPercentToRaw(5), inputMax: expressionPercentToRaw(95),
+    outputMin: expressionPercentToRaw(30), outputMax: expressionPercentToRaw(80),
+  };
+  for (const target of [0.3, 0.55, 0.8]) {
+    const raw = expressionRawForNormalized(mapping, target);
+    assert.ok(Math.abs(normalizedExpression(mapping, raw) - target) < 0.02, `raw ${raw} for ${target}`);
+  }
+  const inverted = { ...mapping, invert: true };
+  for (const target of [0.3, 0.55, 0.8]) {
+    const raw = expressionRawForNormalized(inverted, target);
+    assert.ok(Math.abs(normalizedExpression(inverted, raw) - target) < 0.02, `inverted raw ${raw} for ${target}`);
+  }
+  // Values outside the parameter window clamp to the ends of the pedal window.
+  assert.equal(expressionRawForNormalized(mapping, 0), mapping.inputMin);
+  assert.equal(expressionRawForNormalized(mapping, 1), mapping.inputMax);
+  assert.ok(Math.abs(normalizedExpression(mapping, expressionRawForNormalized(mapping, 1)) - 0.8) < 0.02);
+  const reversed = { inputMin: 127, inputMax: 0 };
+  assert.equal(expressionRawForNormalized(reversed, 1), 0);
+});
+
+
+test('relative fader travel starts at the pressed value and follows displacement', () => {
+  assert.equal(expressionRawFromRelative(40, 0, 100), 40);
+  assert.equal(expressionRawFromRelative(40, 50, 100), 104);
+  assert.equal(expressionRawFromRelative(40, -100, 100), 0);
+  assert.equal(expressionRawFromRelative(120, 100, 100), 127);
+  assert.equal(expressionRawFromRelative(40, 25, 0), 56); // zero-size meters fall back to 200px travel
+});
 
 test('connection hints explain the missing MIDI capability', () => {
   assert.match(connectionHint({ secure: false, midi: false, bluetooth: false }), /HTTPS/i);

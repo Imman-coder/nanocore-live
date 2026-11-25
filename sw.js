@@ -1,5 +1,5 @@
 // Offline app shell for the installable web app. Never caches MIDI traffic.
-const CACHE = 'nanocore-live-v52';
+const CACHE = 'nanocore-live-v60';
 const SHELL = [
   '/',
   '/index.html',
@@ -33,6 +33,8 @@ const SHELL = [
   '/src/core/firmwareSpec.js',
   '/src/core/live.js',
   '/src/core/base.js',
+  '/src/core/demoDevice.js',
+  '/src/core/demoData.js',
   '/src/data/paramHelpers.js',
   '/src/data/blocks/fx1.js',
   '/src/data/blocks/fx2.js',
@@ -44,6 +46,7 @@ const SHELL = [
   '/src/data/blocks/eq.js',
   '/src/transports/webmidi.js',
   '/src/transports/webbluetooth.js',
+  '/src/transports/demo.js',
 ];
 
 self.addEventListener('install', (event) => {

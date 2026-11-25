@@ -2,7 +2,7 @@
 // Editing belongs in the Editor; this view only presents and triggers.
 import { BLOCK_BY_ID } from '../core/spec.js';
 import { effectiveStompLabel } from '../core/store.js';
-import { sceneStored } from '../core/live.js';
+import { sceneStored, expressionRawToPercent, expressionRawFromRelative } from '../core/live.js';
 import { renderAssignmentTable } from './assignments.js';
 import { presetOptions } from './editor.js';
 
@@ -169,18 +169,20 @@ export function renderLive(ctx) {
         ? 'Preset volume'
         : 'unassigned');
     const interactive = true;
+    const initialRaw = ctx.expressionInitialValue(pedal.id);
+    const initialPercent = expressionRawToPercent(initialRaw);
     const control = pedal.fullTouch
       ? `<div class="expression-touch interactive" data-expression-meter="${pedal.id}" role="slider" tabindex="0"
-          aria-label="${escapeHtml(pedal.name)} full touch control" aria-valuemin="0" aria-valuemax="127" aria-valuenow="0">
-          <i id="expr-meter-${pedal.id}" style="width:0%"></i>
-          <span id="expr-value-${pedal.id}">0%</span>
+          aria-label="${escapeHtml(pedal.name)} full touch control" aria-valuemin="0" aria-valuemax="127" aria-valuenow="${initialRaw}">
+          <i id="expr-meter-${pedal.id}" style="width:${initialPercent}%"></i>
+          <span id="expr-value-${pedal.id}">${initialPercent}%</span>
         </div>`
       : `<div class="meter expression-meter interactive"
           data-expression-meter="${pedal.id}" role="slider" tabindex="0" aria-label="${escapeHtml(pedal.name)} level"
-          aria-valuemin="0" aria-valuemax="127" aria-valuenow="0">
-          <i id="expr-meter-${pedal.id}" style="width:0%"></i>
+          aria-valuemin="0" aria-valuemax="127" aria-valuenow="${initialRaw}">
+          <i id="expr-meter-${pedal.id}" style="width:${initialPercent}%"></i>
         </div>
-        <div class="stomp-cc" id="expr-value-${pedal.id}">0%</div>`;
+        <div class="stomp-cc" id="expr-value-${pedal.id}">${initialPercent}%</div>`;
     const html = `<div class="stomp expression-stomp ${expr || ctx.state.globals.volumePedal === pedal.id ? '' : 'muted'}">
       <div class="stomp-label">${escapeHtml(pedal.name)}</div>
       <div class="stomp-cc">${ctx.describeTrigger(pedal.trigger)} → ${escapeHtml(target)}</div>
@@ -250,7 +252,14 @@ export function renderLive(ctx) {
     ${advanced}`;
 }
 
-let draggedExpression = null;
+let draggedExpressionId = null;
+let expressionDragStart = null;
+
+function currentExpressionMeter() {
+  if (!draggedExpressionId) return null;
+  const escaped = CSS.escape ? CSS.escape(draggedExpressionId) : draggedExpressionId;
+  return document.querySelector(`[data-expression-meter="${escaped}"]`);
+}
 
 function paintExpressionVisual(meter, value) {
   meter.setAttribute('aria-valuenow', String(value));
@@ -287,21 +296,42 @@ function setExpressionFromPointer(meter, clientX, clientY) {
 
 document.addEventListener('pointerdown', (event) => {
   const meter = event.target.closest?.('[data-expression-meter].interactive');
-  if (!meter) return;
+  if (!meter?.dataset.expressionMeter) return;
   event.preventDefault();
-  draggedExpression = meter;
+  draggedExpressionId = meter.dataset.expressionMeter;
+  expressionDragStart = {
+    x: event.clientX,
+    y: event.clientY,
+    value: Number(meter.getAttribute('aria-valuenow')) || 0,
+    vertical: meter.dataset.orientation === 'vertical',
+  };
   try { meter.setPointerCapture?.(event.pointerId); } catch { /* synthetic pointer */ }
-  setExpressionFromPointer(meter, event.clientX, event.clientY);
+  if (window.__nanocoreCtx?.state.globals.absoluteExpression) {
+    setExpressionFromPointer(meter, event.clientX, event.clientY);
+  }
 });
 
 document.addEventListener('pointermove', (event) => {
-  if (!draggedExpression) return;
-  setExpressionFromPointer(draggedExpression, event.clientX, event.clientY);
+  // A device write can re-render Live mid-drag; find the current meter rather
+  // than holding a detached node whose rect is zero.
+  const meter = currentExpressionMeter();
+  if (!meter) return;
+  const ctx = window.__nanocoreCtx;
+  if (ctx?.state.globals.absoluteExpression) {
+    setExpressionFromPointer(meter, event.clientX, event.clientY);
+    return;
+  }
+  if (!expressionDragStart) return;
+  const start = expressionDragStart;
+  const vertical = start.vertical || meter.dataset.orientation === 'vertical';
+  const rect = meter.getBoundingClientRect();
+  const span = vertical ? rect.height : rect.width;
+  const delta = vertical ? start.y - event.clientY : event.clientX - start.x;
+  paintExpression(meter, expressionRawFromRelative(start.value, delta, span || 200));
 });
 
-document.addEventListener('pointerup', () => { draggedExpression = null; });
-document.addEventListener('pointercancel', () => { draggedExpression = null; });
-document.addEventListener('lostpointercapture', () => { draggedExpression = null; });
+document.addEventListener('pointerup', () => { draggedExpressionId = null; expressionDragStart = null; });
+document.addEventListener('pointercancel', () => { draggedExpressionId = null; expressionDragStart = null; });
 
 document.addEventListener('dragstart', (event) => {
   const cell = event.target.closest?.('.live-grid-cell.placed.editing');

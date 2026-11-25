@@ -13,17 +13,25 @@ const TABS = [
 ];
 
 function connectionPanel(ctx) {
+  const transport = ctx.transportKind ?? 'webmidi';
   return `<div class="transport">
-      <button id="connect">${ctx.connected ? 'Disconnect' : 'Connect'}</button>
-      <span id="status" class="status ${ctx.connected ? 'online' : 'offline'}">${ctx.statusText()}</span>
-    </div>
-    <div class="field">
-      <label for="transport-kind">Transport</label>
-      <select id="transport-kind" aria-label="Transport" onchange="window.__nanocoreCtx.setTransportKind(this.value)">
-        <option value="webmidi" ${ctx.state.globals.transportKind === 'webbluetooth' ? '' : 'selected'}>USB MIDI / paired Bluetooth MIDI</option>
-        <option value="webbluetooth" ${ctx.state.globals.transportKind === 'webbluetooth' ? 'selected' : ''}>Direct Bluetooth (Web Bluetooth)</option>
-      </select>
-    </div>
+    <button id="connect">${ctx.connected ? 'Disconnect' : 'Connect'}</button>
+    <span id="status" class="status ${ctx.connected ? 'online' : 'offline'}">${ctx.statusText()}</span>
+  </div>
+  <button data-action="demo-mode" class="${ctx.demo ? '' : 'primary'}">${ctx.demo ? 'Exit demo mode' : 'Start demo mode (no pedal)'}</button>
+  <p class="muted small">${ctx.demo ? 'A simulated pedal is running locally. No MIDI messages leave this browser.' : 'Demo mode loads example presets and names so the Editor and Live views can be explored without hardware.'}</p>
+  ${ctx.demo ? `<label class="field demo-data-option"><input type="checkbox" data-setting="demo-use-real-data" ${ctx.demoUseRealData ? 'checked' : ''} onchange="window.__nanocoreCtx.setDemoUseRealData(this.checked)"> Use my actual saved settings and data in demo (edits will change what this browser stores)</label>
+  <p class="muted small">${ctx.demoUseRealData
+    ? 'Demo is using your real saved data — changes persist in this browser.'
+    : 'Demo edits are sandboxed: settings, assignments and layouts you change here are discarded when you exit.'}</p>` : ''}
+  <div class="field">
+    <label for="transport-kind">Transport</label>
+    <select id="transport-kind" aria-label="Transport" onchange="window.__nanocoreCtx.setTransportKind(this.value)">
+      <option value="webmidi" ${transport === 'webmidi' ? 'selected' : ''}>USB MIDI / paired Bluetooth MIDI</option>
+      <option value="webbluetooth" ${transport === 'webbluetooth' ? 'selected' : ''}>Direct Bluetooth (Web Bluetooth)</option>
+      <option value="demo" ${transport === 'demo' ? 'selected' : ''}>Demo mode (no pedal)</option>
+    </select>
+  </div>
     <label class="field"><input type="checkbox" onchange="window.__nanocoreCtx.setGlobalSetting('showLogBar', this.checked)" ${ctx.state.globals.showLogBar !== false ? 'checked' : ''}> Show bottom MIDI message bar</label>
     <label class="field"><input type="checkbox" onchange="window.__nanocoreCtx.setGlobalSetting('hideAssignmentsButton', this.checked)" ${ctx.state.globals.hideAssignmentsButton ? 'checked' : ''}> Hide "Show parameter assignments" button</label>
     <label class="field"><input type="checkbox" onchange="window.__nanocoreCtx.setGlobalSetting('hideLivePresetLabel', this.checked)" ${ctx.state.globals.hideLivePresetLabel ? 'checked' : ''}> Hide "Live — NANOCORE preset" label</label>
@@ -85,6 +93,13 @@ document.addEventListener('click', (event) => {
   if (tab) {
     activeTab = tab.dataset.settingsTab;
     renderSettings(settingsCtx);
+    return;
+  }
+  if (event.target.closest('[data-action="demo-mode"]')) {
+    const menu = document.querySelector('#topbar-menu');
+    if (menu) menu.hidden = true;
+    if (settingsCtx.demo) settingsCtx.exitDemo();
+    else { settingsCtx.connect('demo'); }
     return;
   }
   const save = event.target.closest('[data-settings-save]');

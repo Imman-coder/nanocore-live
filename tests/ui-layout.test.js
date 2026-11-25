@@ -143,7 +143,9 @@ test('vertical expression fill is anchored to the bottom', () => {
 test('expression faders hold touch drags and show vertical fill', () => {
   assert.match(css, /\.expression-meter\.interactive \{[^}]*touch-action: none/);
   const live = readFileSync(new URL('../src/ui/live.js', import.meta.url), 'utf8');
-  assert.match(live, /lostpointercapture/);
+  // A snapshot re-render detaches the meter, so lostpointercapture must not end the drag.
+  assert.match(live, /pointercancel/);
+  assert.doesNotMatch(live, /lostpointercapture/);
   assert.match(live, /fill\.style\.width = '100%'/);
 });
 
@@ -190,4 +192,85 @@ test('live slots have stretch weights and tall containers stack vertically', () 
 test('the live layout editor is large and mirrors row/column structure', () => {
   assert.match(css, /\.modal-box\.layout-modal-box \{ width: 94vw;/);
   assert.match(css, /\.layout-slots\.column \{/);
+});
+
+test('demo mode can be started without a pedal and reaches both views', () => {
+  const app = readFileSync(new URL('../src/ui/app.js', import.meta.url), 'utf8');
+  assert.match(app, /createDemoTransport/);
+  assert.match(app, /get demo\(\)/);
+  assert.match(app, /exitDemo/);
+  assert.match(startSource, /data-start="demo"/);
+  assert.match(startSource, /data-start="exit-demo"/);
+  assert.match(startSource, /value="demo"/);
+  assert.match(settingsSource, /value="demo"/);
+  assert.match(css, /body\.demo-mode/);
+  const sw = readFileSync(new URL('../sw.js', import.meta.url), 'utf8');
+  assert.match(sw, /src\/core\/demoDevice\.js/);
+  assert.match(sw, /src\/transports\/demo\.js/);
+});
+
+test('Live expression faders start from the value of their assigned parameter', () => {
+  const live = readFileSync(new URL('../src/ui/live.js', import.meta.url), 'utf8');
+  assert.match(live, /expressionInitialValue\(pedal\.id\)/);
+  assert.doesNotMatch(live, /aria-valuenow="0"/);
+  const app = readFileSync(new URL('../src/ui/app.js', import.meta.url), 'utf8');
+  assert.match(app, /expressionInitialValue\(/);
+  const core = readFileSync(new URL('../src/core/live.js', import.meta.url), 'utf8');
+  assert.match(core, /export function expressionRawForNormalized/);
+});
+
+test('a pedal assigned to global preset volume is shown as occupied in the Editor', () => {
+  const editor = readFileSync(new URL('../src/ui/editor.js', import.meta.url), 'utf8');
+  assert.match(editor, /volumePedal === pedal\.id/);
+  assert.match(editor, /Preset volume/);
+  const popup = readFileSync(new URL('../src/ui/pedal-popup.js', import.meta.url), 'utf8');
+  assert.match(popup, /globalVolume/);
+});
+
+test('demo mode sandboxes saved data with a demo-only opt-in for real settings', () => {
+  const app = readFileSync(new URL('../src/ui/app.js', import.meta.url), 'utf8');
+  assert.match(app, /demoUseRealData/);
+  assert.match(app, /get demoUseRealData/);
+  assert.match(app, /saveWorkingState/);
+  assert.match(app, /sandboxState/);
+  assert.match(app, /workingStorage/);
+  assert.match(settingsSource, /demo-use-real-data/);
+  assert.match(settingsSource, /ctx\.demo/);
+  assert.match(startSource, /connect\('demo'\)/);
+});
+
+test('FX chain rows can be reordered with touch and pen pointers', () => {
+  const editor = readFileSync(new URL('../src/ui/editor.js', import.meta.url), 'utf8');
+  assert.match(editor, /pointerType === 'mouse'/);
+  assert.match(editor, /setPointerCapture/);
+  assert.match(editor, /elementFromPoint/);
+  assert.match(editor, /beginChainDrag/);
+  assert.match(editor, /pointercancel/);
+  assert.doesNotMatch(editor, /pointerType === 'touch'/);
+  assert.match(css, /\.chain-row \{[^}]*touch-action: pan-y/);
+});
+
+test('vertical expression faders keep a usable height and survive re-renders mid-drag', () => {
+  const live = readFileSync(new URL('../src/ui/live.js', import.meta.url), 'utf8');
+  assert.match(live, /draggedExpressionId/);
+  assert.match(live, /querySelector\(`\[data-expression-meter=/);
+  assert.doesNotMatch(live, /draggedExpression = null/);
+  assert.match(css, /\.live-grid-cell\.vertical-expression[^}]*min-height: 24px/);
+});
+
+test('FX chain touch drag survives reinsertion and accepts gaps between rows', () => {
+  const editor = readFileSync(new URL('../src/ui/editor.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(editor, /lostpointercapture/);
+  assert.match(editor, /function chainRowAt/);
+  assert.match(editor, /chainRowAt\(event\.clientX, event\.clientY\)/);
+});
+
+test('expression faders slide relatively by default with an absolute global option', () => {
+  const live = readFileSync(new URL('../src/ui/live.js', import.meta.url), 'utf8');
+  const globals = readFileSync(new URL('../src/ui/globals.js', import.meta.url), 'utf8');
+  const store = readFileSync(new URL('../src/core/store.js', import.meta.url), 'utf8');
+  assert.match(live, /expressionRawFromRelative/);
+  assert.match(live, /absoluteExpression/);
+  assert.match(globals, /data-global="absolute-expression"/);
+  assert.match(store, /absoluteExpression/);
 });

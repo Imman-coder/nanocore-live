@@ -11,16 +11,18 @@ import { buildCc, buildRequestSysEx, parseSysEx, ResponseAssembler, COMMAND, FIE
 import { parseSnapshot } from '../core/snapshot.js';
 import { COMMAND as CAT, parsePresetCatalog, parseStorageInfo, parseSlotInfo, parseGlobalSettings, activeSlotFor } from '../core/catalog.js';
 import { resolveFirmware, typesFor } from '../core/versions.js';
-import { stompActive, toggleCc, sceneStored, sceneBlockParticipates, expressionBytes } from '../core/live.js';
+import { stompActive, toggleCc, sceneStored, sceneBlockParticipates, expressionBytes, expressionRawForNormalized } from '../core/live.js';
 import { captureBase } from '../core/base.js';
 import { connectionHint } from '../core/capabilities.js';
 import { tapBpm, delayMs, normalizedForMs, SUBDIVISIONS } from '../core/tempo.js';
 import { buildParameterWrite } from '../core/parameterWrite.js';
+import { sandboxState, uiStateOf, withUiState, createMemoryStorage } from '../core/demoData.js';
 import { renderStart } from './start.js';
 import { refreshLiveOrientation, fitLiveBoard } from './live.js';
 import { renderSettings, openSettingsTab } from './settings.js';
 import { createWebMidiTransport } from '../transports/webmidi.js';
 import { createWebBluetoothTransport } from '../transports/webbluetooth.js';
+import { createDemoTransport } from '../transports/demo.js';
 import { renderEditor } from './editor.js';
 import { renderLive, renderLiveSidebar } from './live.js';
 import { openGlobals } from './globals.js';
@@ -34,9 +36,14 @@ const capabilities = {
   bluetooth: typeof navigator.bluetooth?.requestDevice === 'function',
 };
 const escapeHtml = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-let state = loadState(window.localStorage);
+const mainStorage = window.localStorage;
+const demoStorage = createMemoryStorage();
+let state = loadState(mainStorage);
 // Every page open begins with setup; Editor/Live are chosen after that.
 state.mode = 'start';
+let demoState = null;
+let demoUseRealData = false;
+let demoRequested = false;
 let snapshot = null;
 let transport = null;
 let controllerTransport = null;
@@ -54,6 +61,7 @@ const SYSEX_GAP_MS = 25;
 const names = { amp: null, ir: null };
 const logLines = [];
 const catalogState = { busy: false, message: '', presets: 0, amp: 0, ir: 0 };
+let transportBeforeDemo = null;
 let tempoTaps = [];
 
 const currentAssignments = () => assignmentsFor(state, state.activePreset);
@@ -118,6 +126,50 @@ function setStatus(text, online = false) {
   }
 }
 
+function isDemo() { return transport?.kind === 'demo'; }
+
+// Sandboxed demo data lives in memory; only the explicit opt-in writes to the
+// browser's real storage. Every save in the app funnels through here.
+function workingStorage() { return isDemo() && !demoUseRealData ? demoStorage : mainStorage; }
+function saveWorkingState() { saveState(workingStorage(), state); }
+
+function enterDemoData() {
+  demoState = sandboxState(state);
+  state = demoState;
+  demoUseRealData = false;
+  demoRequested = false;
+  Object.assign(routerGlobals, state.globals);
+}
+
+function adoptMainState() {
+  const ui = uiStateOf(state);
+  const real = loadState(mainStorage);
+  // If the opt-in wrote a demo transport choice, undo it on the way out.
+  if (real.globals?.transportKind === 'demo' && transportBeforeDemo) {
+    real.globals.transportKind = transportBeforeDemo;
+    saveState(mainStorage, real);
+  }
+  state = withUiState(real, ui);
+  Object.assign(routerGlobals, state.globals);
+  demoState = null;
+  demoUseRealData = false;
+  demoRequested = false;
+  transportBeforeDemo = null;
+}
+
+function setDemoUseRealData(enabled) {
+  if (!isDemo() || Boolean(enabled) === demoUseRealData) return;
+  const ui = uiStateOf(state);
+  const real = loadState(mainStorage);
+  state = withUiState(real, ui);
+  demoUseRealData = Boolean(enabled);
+  persist();
+  notify(demoUseRealData
+    ? 'Demo now uses your saved data — edits will persist in this browser'
+    : 'Demo is sandboxed again — saved settings are untouched');
+  render();
+}
+
 // One scheduler for every write to the pedal: 25 ms spacing plus coalescing
 // of rapid sweeps of the same control to the last value in the window.
 const scheduler = createMidiScheduler({
@@ -132,6 +184,17 @@ const scheduler = createMidiScheduler({
 });
 
 function send(bytes, key) {
+  // The simulator does not need hardware pacing: skipping the output queue
+  // keeps catalog reads instant even when the browser throttles background tabs.
+  if (isDemo()) {
+    try {
+      if (!transport) throw new Error('Demo pedal is not running');
+      transport.send(bytes);
+      return Promise.resolve(1);
+    } catch (error) {
+      return Promise.reject(error);
+    }
+  }
   return scheduler.send(bytes, key);
 }
 
@@ -166,7 +229,7 @@ function syncPresetFromDevice() {
   const visible = snapshot.activePreset + 1;
   if (state.activePreset !== visible) {
     state = setActivePreset(state, visible);
-    saveState(window.localStorage, state);
+    saveWorkingState();
   }
 }
 
@@ -299,7 +362,7 @@ const routerGlobals = state.globals;
 function persist() {
   // Mutate in place so the router sees the latest globals without being rebuilt.
   Object.assign(routerGlobals, state.globals);
-  saveState(window.localStorage, state);
+  saveWorkingState();
 }
 function update(patch) {
   state = { ...state, ...patch };
@@ -311,7 +374,7 @@ function markEditedNoRender(preset = state.activePreset) {
   const next = markPresetEdited(state, preset);
   if (next === state) return;
   state = next;
-  saveState(window.localStorage, state);
+  saveWorkingState();
 }
 
 async function readSnapshot() {
@@ -350,7 +413,7 @@ async function loadPresetNames() {
     }
   }
   state = setPresetNames(state, found);
-  saveState(window.localStorage, state);
+  saveWorkingState();
   catalogState.presets = found.size;
   render();
 }
@@ -462,30 +525,61 @@ function autoFetchCatalog() {
 }
 
 function setTransportKind(kind) {
-  if (!['webmidi', 'webbluetooth'].includes(kind)) return;
-  update({ globals: { ...state.globals, transportKind: kind } });
+  if (!['webmidi', 'webbluetooth', 'demo'].includes(kind)) return;
   for (const id of ['#transport-kind', '#start-transport']) {
     const select = $(id);
     if (select) select.value = kind;
   }
+  // Selecting demo but not connecting yet must not touch saved data.
+  if (kind === 'demo' && !isDemo()) {
+    if (!transportBeforeDemo) {
+      transportBeforeDemo = state.globals.transportKind && state.globals.transportKind !== 'demo'
+        ? state.globals.transportKind : 'webmidi';
+    }
+    demoRequested = true;
+    updateCapabilityHint();
+    notify('Demo mode selected — press Connect or Try demo mode');
+    render();
+    return;
+  }
+  if (kind !== 'demo' && !isDemo()) {
+    demoRequested = false;
+    transportBeforeDemo = null;
+  }
+  update({ globals: { ...state.globals, transportKind: kind } });
   updateCapabilityHint();
-  notify(`Transport set to ${kind === 'webbluetooth' ? 'direct Bluetooth' : 'Web MIDI'}`);
+  if (kind !== 'demo') notify(`Transport set to ${kind === 'webbluetooth' ? 'direct Bluetooth' : 'Web MIDI'}`);
 }
 
 function disconnect() {
+  const wasDemo = isDemo();
   transport?.disconnect();
   controllerTransport?.disconnect();
   transport = null;
   controllerTransport = null;
+  // Leaving demo always returns to the browser's saved data. With the opt-in
+  // off, none of the sandbox edits ever reached it.
+  if (wasDemo) adoptMainState();
   setStatus('Disconnected', false);
   names.amp = null;
   names.ir = null;
+  names.ampActive = null;
+  names.irActive = null;
   catalogState.presets = 0;
   catalogState.amp = 0;
   catalogState.ir = 0;
-  catalogState.message = 'Disconnected — nothing fetched in this session.';
+  catalogState.message = wasDemo
+    ? 'Demo mode closed — no pedal was written to.'
+    : 'Disconnected — nothing fetched in this session.';
   render();
-  notify('Disconnected from the NANOCORE');
+  notify(wasDemo ? 'Demo mode closed' : 'Disconnected from the NANOCORE');
+}
+
+function exitDemo() {
+  if (!isDemo()) return;
+  disconnect();
+  update({ mode: 'start' });
+  notify('Back at Start — connect a pedal whenever you are ready');
 }
 
 async function refreshCatalog(which = 'all') {
@@ -522,15 +616,31 @@ async function scanPorts() {
   notify('MIDI devices listed — choose ports, then Connect');
 }
 
-async function connect() {
-  const kind = state.globals.transportKind ?? $('#transport-kind')?.value ?? 'webmidi';
+async function connect(forcedKind) {
+  const kind = forcedKind ?? (demoRequested ? 'demo' : state.globals.transportKind ?? $('#transport-kind')?.value ?? 'webmidi');
+  if (isDemo() && kind !== 'demo') adoptMainState();
+  if (kind === 'demo' && !isDemo()) {
+    if (!transportBeforeDemo) {
+      transportBeforeDemo = state.globals.transportKind && state.globals.transportKind !== 'demo'
+        ? state.globals.transportKind : 'webmidi';
+    }
+    // Copy the saved data first: sandbox edits must never reach mainStorage.
+    enterDemoData();
+  } else if (kind !== 'demo') {
+    transportBeforeDemo = null;
+  }
   const reuseScannedWebMidi = kind === 'webmidi' && controllerTransport?.kind === 'webmidi' && !controllerTransport.connected;
   try {
     transport?.disconnect();
     if (!reuseScannedWebMidi) controllerTransport?.disconnect();
     names.amp = null;
     names.ir = null;
-    if (kind === 'webbluetooth') {
+    names.ampActive = null;
+    names.irActive = null;
+    if (kind === 'demo') {
+      transport = createDemoTransport();
+      controllerTransport = transport;
+    } else if (kind === 'webbluetooth') {
       transport = createWebBluetoothTransport();
       controllerTransport = createWebMidiTransport();
       try { await controllerTransport.connect(); } catch (error) { log(`controllers: ${error.message}`); }
@@ -544,9 +654,10 @@ async function connect() {
     transport.onStateChange(() => render());
     if (controllerTransport !== transport) controllerTransport.onStateChange(() => render());
     applyPortSelection();
-    setStatus(`Connected (${transport.kind})`, true);
+    setStatus(kind === 'demo' ? 'Demo mode (no pedal)' : `Connected (${transport.kind})`, true);
     setTransportKind(kind);
-    log(`connected via ${transport.kind}`);
+    log(kind === 'demo' ? 'demo pedal started (no hardware involved)' : `connected via ${transport.kind}`);
+    if (kind === 'demo') notify('Demo mode — a simulated NANOCORE is ready');
     render();
     await readSnapshot();
     autoFetchCatalog();
@@ -635,6 +746,18 @@ const ctx = {
     syncDelays();
   },
   syncDelays,
+  // Live faders open at the current device value of whatever they control.
+  // The inverse of normalizedExpression keeps custom pedal/parameter windows
+  // and inversion consistent with the MIDI that movement actually sends.
+  expressionInitialValue(pedalId) {
+    if (state.globals.volumePedal === pedalId) {
+      return Math.round(Math.max(0, Math.min(100, snapshot?.volume ?? 0)) / 100 * 127);
+    }
+    const mapping = currentAssignments().expressions.find((entry) => entry.id === pedalId);
+    if (!mapping) return 0;
+    const value = snapshot?.blocks.find((block) => block.id === mapping.target)?.params[mapping.paramIndex];
+    return Number.isFinite(value) ? expressionRawForNormalized(mapping, value) : 0;
+  },
   sendExpression(pedalId, value) {
     if (state.globals.volumePedal === pedalId) {
       paintExpressionFeedback(pedalId, value);
@@ -881,6 +1004,13 @@ const ctx = {
     }
   },
   get connected() { return Boolean(transport); },
+  get demo() { return isDemo(); },
+  get demoUseRealData() { return demoUseRealData; },
+  get transportKind() {
+    return isDemo() || demoRequested ? 'demo' : (state.globals.transportKind ?? 'webmidi');
+  },
+  setDemoUseRealData,
+  exitDemo,
   applyPortSelection,
   setPortSelection(selection) {
     state = { ...state, globals: { ...state.globals, portSelection: selection } };
@@ -909,14 +1039,18 @@ const ctx = {
   setMode(mode) { update({ mode }); },
   recallPreset(preset) {
     state = setActivePreset(state, preset);
-    saveState(window.localStorage, state);
+    saveWorkingState();
     router.recallPreset(preset);
     setTimeout(readSnapshot, 260);
   },
   async renamePresetOnDevice(name) {
-    if (!transport) return notify('Connect to the NANOCORE first');
+    if (!transport && !isDemo()) return notify('Connect to the NANOCORE first');
     const clean = cleanPresetName(name);
     if (!clean) return notify('Enter a preset name using printable characters');
+    if (isDemo()) {
+      ctx.updatePreset(state.activePreset, { name: clean });
+      return notify('Demo mode — name saved in this browser, no pedal was written');
+    }
     const ok = window.confirm(
       `Rename NANOCORE preset ${state.activePreset} to "${clean}" and save it permanently?\n\n` +
       'The name is limited to 8 printable ASCII characters by the pedal.',
@@ -931,6 +1065,7 @@ const ctx = {
     } catch (error) { notify(error.message); }
   },
   async savePreset() {
+    if (isDemo()) return notify('Demo mode — nothing is written to a pedal');
     const preset = state.activePreset;
     const ok = window.confirm(
       `Save the pedal's current live state permanently into NANOCORE preset ${preset}?\n\n` +
@@ -979,6 +1114,7 @@ function fitTopbar() {
 window.addEventListener('resize', () => { fitTopbar(); refreshLiveOrientation(); fitLiveBoard(); });
 
 function render() {
+  document.body.classList.toggle('demo-mode', isDemo());
   document.body.classList.toggle('start-mode', state.mode === 'start');
   document.body.classList.toggle('hide-logbar', state.globals.showLogBar === false);
   document.body.classList.toggle('live-hide-sidebar', state.mode === 'live' && Boolean(state.globals.liveLayout?.hideSidebar));

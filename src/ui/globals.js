@@ -74,6 +74,8 @@ function body(ctx) {
     </div>
     <div class="field"><label><input type="checkbox" data-global="interactive-live" ${g.interactiveLive ? 'checked' : ''}> Interactive Live mode</label>
       <span class="muted small">Let the Live expression meters be dragged or arrow-keyed to control assigned parameters.</span></div>
+    <div class="field"><label><input type="checkbox" data-global="absolute-expression" ${g.absoluteExpression ? 'checked' : ''}> Absolute expression faders</label>
+      <span class="muted small">Off (default): dragging slides the value relatively from where you pressed. On: the touch position sets the value directly.</span></div>
     <h3>Tempo</h3>
     <div class="field"><label><input type="checkbox" data-global="tempo-sync" ${g.tempoSync !== false ? 'checked' : ''}> Sync delay time to tap tempo</label></div>
     <div class="field">
@@ -172,6 +174,7 @@ function collect() {
   }
   globals.volumePedal = root.querySelector('[data-global="volume-pedal"]')?.value || null;
   globals.interactiveLive = Boolean(root.querySelector('[data-global="interactive-live"]')?.checked);
+  globals.absoluteExpression = Boolean(root.querySelector('[data-global="absolute-expression"]')?.checked);
   globals.tempoSync = Boolean(root.querySelector('[data-global="tempo-sync"]')?.checked);
   globals.sceneCount = Number(root.querySelector('[data-global="scene-count"]')?.value ?? globals.sceneCount);
   globals.firmware = root.querySelector('[data-global="firmware"]')?.value ?? globals.firmware;

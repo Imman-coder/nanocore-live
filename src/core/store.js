@@ -103,6 +103,8 @@ function migratePreset(preset) {
         pedal: expression.id,
         inputMin: expression.inputMin ?? 0,
         inputMax: expression.inputMax ?? 127,
+        outputMin: expression.outputMin ?? 0,
+        outputMax: expression.outputMax ?? 127,
         invert: Boolean(expression.invert),
       };
     }
@@ -134,6 +136,7 @@ export function createDefaultState() {
       hideLivePresetLabel: false,
       hideAssignmentsButton: false,
       interactiveLive: false,
+      absoluteExpression: false,
       volumePedal: null,
       tempoSync: true,
       tempo: { bpm: null, signature: '4/4', subdivision: '1/8' },
@@ -188,6 +191,7 @@ export function normalizeState(state) {
   const sceneCount = Math.max(3, Math.min(6, Number(globals.sceneCount) || 3));
   globals.tapTempoSwitch = globals.tapTempoSwitch ?? base.globals.tapTempoSwitch;
   globals.showLogBar = typeof globals.showLogBar === 'boolean' ? globals.showLogBar : true;
+  globals.absoluteExpression = typeof globals.absoluteExpression === 'boolean' ? globals.absoluteExpression : false;
   globals.volumePedal = globals.volumePedal ?? null;
   globals.hideLivePresetLabel = typeof globals.hideLivePresetLabel === 'boolean' ? globals.hideLivePresetLabel : false;
   globals.hideAssignmentsButton = typeof globals.hideAssignmentsButton === 'boolean' ? globals.hideAssignmentsButton : false;
@@ -265,6 +269,8 @@ export function assignmentsFor(state, preset) {
       paramIndex: Number(index) || 0,
       inputMin: mapping.inputMin ?? 0,
       inputMax: mapping.inputMax ?? 127,
+      outputMin: mapping.outputMin ?? 0,
+      outputMax: mapping.outputMax ?? 127,
       invert: Boolean(mapping.invert),
     }];
   });

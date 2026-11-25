@@ -81,6 +81,24 @@ test('expression bindings are stored per preset', () => {
   assert.equal(assignmentsFor(state, 4).expressions.length, 0);
 });
 
+test('expression value windows reach the router-facing assignment shape', () => {
+  const state = setParamPedal(createDefaultState(), 3, 'fx1', 0, {
+    pedal: 'E4', inputMin: 6, inputMax: 121, outputMin: 38, outputMax: 102, invert: true,
+  });
+  const entry = assignmentsFor(state, 3).expressions[0];
+  assert.equal(entry.inputMin, 6);
+  assert.equal(entry.inputMax, 121);
+  assert.equal(entry.outputMin, 38);
+  assert.equal(entry.outputMax, 102);
+  assert.equal(entry.invert, true);
+});
+
+test('absolute expression faders default off and survive normalization', () => {
+  assert.equal(createDefaultState().globals.absoluteExpression, false);
+  assert.equal(normalizeState({ globals: { absoluteExpression: true } }).globals.absoluteExpression, true);
+  assert.equal(normalizeState({ globals: { absoluteExpression: 'yes' } }).globals.absoluteExpression, false);
+});
+
 test('export/import preserves assignments', () => {
   let state = createDefaultState();
   state = setBlockStomp(state, 12, 'mod', 'FS3');

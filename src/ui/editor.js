@@ -25,7 +25,7 @@ export function renderEditor(ctx) {
       <button id="save-preset" class="primary" title="Write live RAM permanently into this NANOCORE preset">Save to pedal</button>
     </div>
     <div class="muted small">${ctx.snapshot
-      ? `Loaded from the pedal: preset ${ctx.snapshot.activePreset + 1}, volume ${ctx.snapshot.volume}`
+      ? `${ctx.demo ? 'Demo snapshot' : 'Loaded from the pedal'}: preset ${ctx.snapshot.activePreset + 1}, volume ${ctx.snapshot.volume}`
       : 'Connect and read the snapshot to edit the current preset.'}</div>
   </div>`;
 
@@ -114,10 +114,11 @@ function detail(ctx, blockId, live) {
       ${(ctx.state.globals.expressionPedals ?? []).map((pedal) => {
         const entry = Object.entries(ctx.assignments.paramPedals)
           .find(([, mapping]) => mapping?.pedal === pedal.id);
+        const globalVolume = ctx.state.globals.volumePedal === pedal.id;
         const target = entry
           ? `${BLOCK_BY_ID[entry[0].split(':')[0]]?.name ?? entry[0].split(':')[0]} · ${Number(entry[0].split(':')[1]) + 1}`
-          : 'free';
-        return `<span class="expr-map ${entry ? 'assigned' : ''}"><b>${escapeHtml(pedal.id)}</b> ${escapeHtml(target)}</span>`;
+          : globalVolume ? 'Preset volume · Globals' : 'free';
+        return `<span class="expr-map ${entry || globalVolume ? 'assigned' : ''}" ${globalVolume ? 'title="Assigned to preset volume in Globals — clear it there to free this pedal"' : ''}><b>${escapeHtml(pedal.id)}</b> ${escapeHtml(target)}</span>`;
       }).join('')}
     </div>
     <h3>Stomp switch <span class="muted small">— one footswitch can drive this block</span></h3>
@@ -233,43 +234,65 @@ function paintOrder(rows) {
   }
 }
 
-document.addEventListener('dragstart', (event) => {
-  const row = event.target.closest?.('.chain-row');
-  if (!row) return;
+function beginChainDrag(row) {
+  if (!row || dragOrder) return false;
   dragRows = [...document.querySelectorAll('.chain-strip .chain-row')];
   dragOriginal = [...dragRows];
   dragOrder = dragRows.map((r) => r.dataset.block);
   dragDropped = false;
   draggedBlock = row.dataset.block;
   row.classList.add('dragging');
-  event.dataTransfer?.setData('text/plain', draggedBlock);
-});
+  return true;
+}
 
-document.addEventListener('dragend', () => {
-  if (!dragDropped && dragOriginal) paintOrder(dragOriginal);
+function previewChainDrag(targetRow, clientX) {
+  if (!targetRow || !draggedBlock || !dragOrder) return;
+  for (const other of document.querySelectorAll('.chain-row.drag-over')) other.classList.remove('drag-over');
+  if (targetRow.dataset.block === draggedBlock) return;
+  targetRow.classList.add('drag-over');
+  const target = targetRow.dataset.block;
+  const next = dragOrder.filter((block) => block !== draggedBlock);
+  if (!next.includes(target)) return;
+  const rect = targetRow.getBoundingClientRect();
+  const after = clientX > rect.left + rect.width / 2;
+  next.splice(next.indexOf(target) + (after ? 1 : 0), 0, draggedBlock);
+  if (next.join() === dragOrder.join()) return;
+  dragOrder = next;
+  paintOrder(next.map((block) => dragRows.find((r) => r.dataset.block === block)));
+}
+
+function endChainDrag({ commit = false } = {}) {
+  if (!dragOrder) return;
+  const original = dragOriginal?.map((row) => row.dataset.block) ?? [];
+  const current = [...document.querySelectorAll('.chain-strip .chain-row')].map((row) => row.dataset.block);
+  if (commit && currentCtx?.snapshot && current.join() !== original.join()) {
+    dragDropped = true;
+    currentCtx.setChainOrder(current);
+  } else if (!dragDropped && dragOriginal) {
+    paintOrder(dragOriginal);
+  }
   draggedBlock = null;
   dragOrder = null;
   dragOriginal = null;
   dragRows = null;
+  dragDropped = false;
   document.querySelectorAll('.chain-row.dragging, .chain-row.drag-over').forEach((el) =>
     el.classList.remove('dragging', 'drag-over'));
+}
+
+document.addEventListener('dragstart', (event) => {
+  const row = event.target.closest?.('.chain-row');
+  if (!row || !beginChainDrag(row)) return;
+  event.dataTransfer?.setData('text/plain', draggedBlock);
 });
+
+document.addEventListener('dragend', () => endChainDrag());
 
 document.addEventListener('dragover', (event) => {
   const row = event.target.closest?.('.chain-row');
   if (!row || !draggedBlock || !dragOrder) return;
   event.preventDefault();
-  for (const other of document.querySelectorAll('.chain-row.drag-over')) other.classList.remove('drag-over');
-  row.classList.add('drag-over');
-  const target = row.dataset.block;
-  const next = dragOrder.filter((block) => block !== draggedBlock);
-  if (!next.includes(target)) return;
-  const rect = row.getBoundingClientRect();
-  const after = event.clientX > rect.left + rect.width / 2;
-  next.splice(next.indexOf(target) + (after ? 1 : 0), 0, draggedBlock);
-  if (next.join() === dragOrder.join()) return;
-  dragOrder = next;
-  paintOrder(next.map((block) => dragRows.find((r) => r.dataset.block === block)));
+  previewChainDrag(row, event.clientX);
 });
 
 document.addEventListener('dragleave', (event) => {
@@ -278,20 +301,71 @@ document.addEventListener('dragleave', (event) => {
 });
 
 document.addEventListener('drop', (event) => {
-  const ctx = currentCtx;
-  if (!draggedBlock || !ctx?.snapshot || !event.target.closest?.('.chain-strip')) return;
+  if (!draggedBlock || !currentCtx?.snapshot || !event.target.closest?.('.chain-strip')) return;
   event.preventDefault();
-  const order = [...document.querySelectorAll('.chain-strip .chain-row')].map((row) => row.dataset.block);
-  dragDropped = true;
-  document.querySelectorAll('.chain-row.dragging, .chain-row.drag-over').forEach((el) =>
-    el.classList.remove('dragging', 'drag-over'));
-  ctx.setChainOrder(order);
-  draggedBlock = null;
+  endChainDrag({ commit: true });
 });
+
+// paintOrder() re-inserts rows on every preview, which releases pointer
+// capture. Hit testing with a nearest-row fallback keeps the gesture alive.
+function chainRowAt(x, y) {
+  const strip = document.querySelector('.chain-strip');
+  if (!strip) return null;
+  const direct = document.elementFromPoint(x, y)?.closest?.('.chain-strip .chain-row');
+  if (direct) return direct;
+  const bounds = strip.getBoundingClientRect();
+  if (x < bounds.left - 24 || x > bounds.right + 24 || y < bounds.top - 24 || y > bounds.bottom + 24) return null;
+  let nearest = null;
+  let best = Infinity;
+  for (const row of strip.querySelectorAll('.chain-row')) {
+    const rect = row.getBoundingClientRect();
+    const dx = Math.max(rect.left - x, 0, x - rect.right);
+    const dy = Math.max(rect.top - y, 0, y - rect.bottom);
+    const distance = dx * dx + dy * dy;
+    if (distance < best) { best = distance; nearest = row; }
+  }
+  return nearest;
+}
+
+// Phones and tablets do not reliably fire HTML5 drag events. Any non-mouse
+// pointer (touch or pen) gets the same preview/commit behaviour via hit testing.
+let chainTouchMove = null;
+let suppressChainClick = false;
+document.addEventListener('pointerdown', (event) => {
+  if (event.pointerType === 'mouse') return;
+  const row = event.target.closest?.('.chain-strip .chain-row');
+  if (!row) return;
+  chainTouchMove = { id: event.pointerId, row, x: event.clientX, y: event.clientY, started: false };
+  try { row.setPointerCapture?.(event.pointerId); } catch { /* synthetic pointer */ }
+});
+document.addEventListener('pointermove', (event) => {
+  const move = chainTouchMove;
+  if (!move || event.pointerId !== move.id) return;
+  if (!move.started) {
+    if (Math.hypot(event.clientX - move.x, event.clientY - move.y) < 10) return;
+    if (!beginChainDrag(move.row)) return;
+    move.started = true;
+  }
+  event.preventDefault();
+  const target = chainRowAt(event.clientX, event.clientY);
+  previewChainDrag(target, event.clientX);
+});
+function finishChainTouch(event, commit) {
+  const move = chainTouchMove;
+  if (!move || event.pointerId !== move.id) return;
+  chainTouchMove = null;
+  if (!move.started) return;
+  suppressChainClick = true;
+  setTimeout(() => { suppressChainClick = false; }, 0);
+  endChainDrag({ commit });
+}
+document.addEventListener('pointerup', (event) => finishChainTouch(event, true));
+document.addEventListener('pointercancel', (event) => finishChainTouch(event, false));
 
 document.addEventListener('click', (event) => {
   const ctx = currentCtx;
   if (!ctx) return;
+  if (suppressChainClick && event.target.closest?.('.chain-row')) return;
   const select = event.target.closest('[data-action="select-block"]');
   if (select) {
     ctx.selectBlock(select.dataset.block);

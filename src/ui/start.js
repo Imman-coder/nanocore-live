@@ -13,10 +13,21 @@ export function renderStart(ctx) {
   const deviceOutputId = selection.deviceOutputId ?? ports.outputId ?? '';
   const controllers = new Set(selection.enabledInputIds ?? ports.inputs.filter((p) => p.role === 'controller').map((p) => p.id));
   const catalog = ctx.catalogStatus();
-  const transport = globals.transportKind ?? 'webmidi';
+  const transport = ctx.transportKind ?? 'webmidi';
   const isWebMidi = devicePorts.outputs.some((p) => p.type === 'output');
 
-  return `<h2>Start <span class="muted small">— set up the pedal before editing</span></h2>
+  return `<h2>Start <span class="muted small">${ctx.demo ? '— demo pedal is running' : '— set up the pedal before editing'}</span></h2>
+    ${ctx.demo ? `
+      <div class="card demo-card active">
+        <h3>Demo mode is running</h3>
+        <p class="muted small">A simulated NANOCORE is loaded with example presets, amp and cab names. Every control works locally; nothing is sent to hardware. Demo edits stay in this session unless you opt in to your saved data in Settings.</p>
+        <div class="row-actions"><button class="primary" data-start="editor">Continue to Editor</button><button data-start="live">Open Live view</button><button data-start="exit-demo">Exit demo mode</button></div>
+      </div>` : `
+      <div class="card demo-card">
+        <h3>No pedal connected? Try the demo</h3>
+        <p class="muted small">Explore the Editor and Live views with a simulated pedal and example names. One click, no hardware or permissions needed.</p>
+        <button class="primary" data-start="demo">Try demo mode</button>
+      </div>`}
     <div class="start-grid">
       <section class="card start-step">
         <h3>1. Connection</h3>
@@ -25,9 +36,10 @@ export function renderStart(ctx) {
           <select id="start-transport" onchange="window.__nanocoreCtx.setTransportKind(this.value)">
             <option value="webmidi" ${transport === 'webmidi' ? 'selected' : ''}>USB MIDI / paired Bluetooth MIDI</option>
             <option value="webbluetooth" ${transport === 'webbluetooth' ? 'selected' : ''}>Direct Bluetooth (Web Bluetooth)</option>
+            <option value="demo" ${transport === 'demo' ? 'selected' : ''}>Demo mode (no pedal)</option>
           </select>
         </div>
-        <p class="muted small">${escapeHtml(ctx.connectionHint())}</p>
+        <p class="muted small">${ctx.demo ? 'Demo mode uses a simulated pedal in this browser — no MIDI permissions or hardware are used.' : escapeHtml(ctx.connectionHint())}</p>
         <div class="row-actions">
           <button class="primary" data-start="connect">${ctx.connected ? 'Disconnect' : 'Connect'}</button>
           <button data-start="scan">Scan MIDI devices</button>
@@ -90,6 +102,7 @@ export function renderStart(ctx) {
     ${ctx.connected ? `<div class="row-actions" style="margin-top:14px">
       <button class="primary" data-start="editor">Continue to Editor</button>
       <button data-start="live">Open Live view</button>
+      ${ctx.demo ? '<button data-start="exit-demo">Exit demo mode</button>' : ''}
     </div>` : ''}`;
 }
 
@@ -98,6 +111,8 @@ document.addEventListener('click', (event) => {
   const ctx = startCtx ?? window.__nanocoreCtx;
   if (!button || !ctx) return;
   switch (button.dataset.start) {
+    case 'demo': return ctx.connect('demo');
+    case 'exit-demo': return ctx.exitDemo();
     case 'connect': return ctx.connected ? ctx.disconnect() : ctx.connect();
     case 'scan': return ctx.scanPorts();
     case 'read': return ctx.readSnapshot();

@@ -31,6 +31,28 @@ export function expressionBytes(mapping, channel, variant, value) {
   );
   return buildCc(channel, cc, Math.round(normalized * 127));
 }
+
+// Relative fader travel: a gesture starts at the current value and adds the
+// pointer displacement across the fader's full span. Absolute mode instead
+// maps the touch position directly with setExpressionFromPointer.
+export function expressionRawFromRelative(startValue, delta, span = 200) {
+  const travel = Number(span) > 0 ? Number(span) : 200;
+  return Math.round(clamp(Number(startValue) + (Number(delta) / travel) * 127, 0, 127));
+}
+
+// Inverse of normalizedExpression: the raw pedal position that corresponds to
+// a parameter's current normalized value. Used to recall that value on Live.
+export function expressionRawForNormalized(mapping, normalized) {
+  const outLo = clamp((mapping?.outputMin ?? 0) / 127, 0, 1);
+  const outHi = clamp((mapping?.outputMax ?? 127) / 127, 0, 1);
+  const target = clamp(Number(normalized) || 0, 0, 1);
+  let input = outHi === outLo ? 0.5 : clamp((target - outLo) / (outHi - outLo), 0, 1);
+  if (mapping?.invert) input = 1 - input;
+  const lo = clamp(Number(mapping?.inputMin) || 0, 0, 127);
+  const hi = clamp(Number(mapping?.inputMax ?? 127), 0, 127);
+  return Math.round(clamp(lo + input * (hi - lo), 0, 127));
+}
+
 export function sceneStored(assignments, name) {
   if (name === 'base') return true;
   return Boolean(Object.keys(assignments?.scenes?.[name] ?? {}).length

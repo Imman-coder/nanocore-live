@@ -33,6 +33,7 @@ function render() {
   const { ctx, target, pedal, trigger, minPercent, maxPercent, outMinPercent, outMaxPercent, invert } = state;
   const pedals = ctx.state.globals.expressionPedals;
   const chosen = pedals.find((p) => p.id === pedal);
+  const globalVolumeId = ctx.state.globals.volumePedal;
   const mapping = ctx.assignments.paramPedals[keyOf(target)];
   const message = trigger ?? chosen?.trigger ?? { type: 'cc', channel: 1, number: 7 };
   const key = keyOf(target);
@@ -46,8 +47,12 @@ function render() {
     ${target.cc === null ? '<p class="small" style="color:#e6b980">⚠ This parameter has no documented CC — it uses SysEx. Live sweeps may be less stable and are throttled.</p>' : ''}
     <h3>Pedal</h3>
     <div class="radio-row">
-      ${pedals.map((p) => `<button class="radio-card ${p.id === pedal ? 'active' : ''}" data-popup="pedal" data-id="${p.id}">
-        <b>${escapeHtml(p.name)}</b><span class="muted small">${ctx.describeTrigger(p.trigger)}</span></button>`).join('')}
+      ${pedals.map((p) => {
+        const globalVolume = globalVolumeId === p.id;
+        return `<button class="radio-card ${p.id === pedal ? 'active' : ''}" data-popup="pedal" data-id="${p.id}"
+          ${globalVolume ? 'disabled title="Used globally for preset volume — clear it in Globals first"' : ''}>
+          <b>${escapeHtml(p.name)}</b><span class="muted small">${globalVolume ? 'Global · Preset volume' : ctx.describeTrigger(p.trigger)}</span></button>`;
+      }).join('')}
     </div>
     <h3>Incoming MIDI message</h3>
     <div class="field">
