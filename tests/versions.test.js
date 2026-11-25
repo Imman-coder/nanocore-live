@@ -40,6 +40,21 @@ test('AMP and CAB have no static type list; their names come from the device', (
 
 
 
+test('firmware 1.12+ appends a SysEx-only EQ Level control', () => {
+  const older = typesFor('eq', '1.11').find((type) => type.id === 0);
+  assert.equal(older.params.length, 3);
+  for (const firmware of ['1.12', '1.2', '1.3.5', '1.2-modified']) {
+    for (const [id, expectedIndex] of [[0, 3], [1, 6], [2, 8]]) {
+      const params = typesFor('eq', firmware).find((type) => type.id === id).params;
+      const level = params.at(-1);
+      assert.equal(params.length, expectedIndex + 1);
+      assert.equal(level.label, 'Level');
+      assert.equal(level.cc, null);
+      assert.deepEqual([level.min, level.max], [-12, 12]);
+    }
+  }
+});
+
 test('firmware 1.12+ adds CAB Output Level on CC67', () => {
   assert.deepEqual(extraCommonParams('cab', '1.10'), []);
   for (const firmware of ['1.12', '1.2', '1.3.5', '1.2-modified']) {

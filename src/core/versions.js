@@ -102,6 +102,12 @@ export function typesFor(blockId, firmware) {
         (param.label === 'Time' || param.label === 'Delay') ? { ...param, max: 2000 } : param),
     }));
   }
+  if (newer && blockId === 'eq') {
+    types = types.map((type) => ({
+      ...type,
+      params: [...type.params, range('Level', -12, 12, null, 'dB', 0)],
+    }));
+  }
   if (firmware === MODIFIED) types = modifiedTypes(blockId, types);
   return types;
 }
