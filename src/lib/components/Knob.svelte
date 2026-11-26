@@ -84,7 +84,7 @@
   <div class="flex flex-col gap-0.5 text-[11px]"><label class="text-xs text-muted" for={id}>{label}</label><span class="text-center">{shown}</span></div>
   <input
     {id}
-    class="pointer-events-none absolute h-px w-px rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit opacity-0"
+    class="pointer-events-none absolute h-px w-px input input-bordered input-sm opacity-0"
     type="range"
     min="0"
     max={ceiling}

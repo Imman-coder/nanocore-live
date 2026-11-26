@@ -123,6 +123,22 @@ test('sceneBlocks is a per-preset map defaulting to all blocks participating', (
   assert.equal(state.presets['2']?.sceneBlocks?.mod, undefined);
 });
 
+test('excluding a block can forget its saved scene and base values', () => {
+  let state = createDefaultState();
+  state = setScene(state, 1, 'scene1', { 'mod:0': 0.5, 'del:0': 0.2 });
+  state = setScene(state, 1, 'scene2', { 'mod:1': 0.4, 'fx2:0': 0.1 });
+  state = setSceneEnabled(state, 1, 'scene1', { mod: true, del: true });
+  state = setBase(state, 1, { 'mod:2': 0.3, 'del:1': 0.7 }, { mod: true, del: false });
+  state = setSceneBlock(state, 1, 'mod', false, { forgetValues: true });
+  const preset = state.presets['1'];
+  assert.equal(preset.sceneBlocks.mod, false);
+  assert.deepEqual(preset.scenes.scene1, { 'del:0': 0.2 });
+  assert.deepEqual(preset.scenes.scene2, { 'fx2:0': 0.1 });
+  assert.deepEqual(preset.sceneEnabled.scene1, { del: true });
+  assert.deepEqual(preset.base.values, { 'del:1': 0.7 });
+  assert.deepEqual(preset.base.enabled, { del: false });
+});
+
 test('scenes are stored per preset and normalised', () => {
   let state = createDefaultState();
   state = setScene(state, 7, 'scene1', { 'del:0': 0.5, 'mod:1': 0.25 });

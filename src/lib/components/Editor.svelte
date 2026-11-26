@@ -17,6 +17,7 @@
 
   let stripEl;
   let popupTarget = null;
+  let sceneOffBlock = null;
   let nameDraft = '';
   let namePreset = null;
 
@@ -35,6 +36,11 @@
   $: globals = state.globals ?? {};
   $: preset = state.activePreset ?? 1;
   $: assignments = ($app.state, ctx.assignments);
+  $: forgetCount = sceneOffBlock
+    ? Object.values(assignments?.scenes ?? {}).reduce((sum, scene) =>
+        sum + Object.keys(scene ?? {}).filter((key) => key.startsWith(`${sceneOffBlock}:`)).length, 0)
+      + Object.keys(assignments?.base?.values ?? {}).filter((key) => key.startsWith(`${sceneOffBlock}:`)).length
+    : 0;
   $: firmware = $app.firmware ?? ctx.firmware;
   $: chain = chainBlockIds(snapshot?.chainOrder);
   $: byId = Object.fromEntries((snapshot?.blocks ?? []).map((block) => [block.id, block]));
@@ -277,23 +283,38 @@
     popupTarget = { block: selected, paramIndex: index, label: param.label, cc: param.cc ?? null };
   }
 
+  function requestSceneBlock(event) {
+    if (event.currentTarget.checked) {
+      ctx.setSceneBlock(selected, true);
+      return;
+    }
+    event.currentTarget.checked = true;
+    sceneOffBlock = selected;
+  }
+
+  function confirmSceneBlockOff() {
+    const block = sceneOffBlock;
+    sceneOffBlock = null;
+    if (block) ctx.setSceneBlock(block, false, { forgetValues: true });
+  }
+
   onDestroy(() => detachChainTouch());
 </script>
 
 <div class="flex min-h-0 min-w-0 flex-1 flex-col [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:rounded-lg [&::-webkit-scrollbar-thumb]:bg-line">
 <div class="flex items-start gap-4 max-[640px]:flex-col">
   <aside class="w-60 flex-none overflow-auto [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:rounded-lg [&::-webkit-scrollbar-thumb]:bg-line max-[900px]:w-auto max-[640px]:w-auto">
-    <div class="mb-3 rounded-xl border border-line bg-panel p-3.5">
+    <div class="card mb-3 border border-base-300 bg-base-200 p-3.5">
       <h2 class="m-0 mb-3 text-lg">NANOCORE</h2>
       <h3 class="mb-2 mt-3.5 text-xs uppercase tracking-[0.08em] text-muted">Preset volume</h3>
-      <input id="preset-volume" class="w-full rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit" type="range" min="0" max="100"
+      <input id="preset-volume" class="w-full range range-primary" type="range" min="0" max="100"
         value={snapshot?.volume ?? 60} aria-label="Preset volume"
         on:change={(event) => ctx.setVolume(Number(event.currentTarget.value))}>
       <div class="text-muted text-xs">{snapshot?.volume ?? '—'} / 100</div>
       <div class="mb-2.5 flex flex-wrap items-center gap-2">
-        <button class="cursor-pointer rounded-lg border border-line bg-panel-2 px-3 py-1.5 font-[inherit] text-inherit hover:border-accent disabled:cursor-not-allowed disabled:opacity-50" on:click={() => ctx.recallPreset(Math.max(1, Math.min(64, preset - 1)))} aria-label="Previous preset">◀</button>
-        <button class="cursor-pointer rounded-lg border border-line bg-panel-2 px-3 py-1.5 font-[inherit] text-inherit hover:border-accent disabled:cursor-not-allowed disabled:opacity-50" on:click={() => ctx.recallPreset(preset)}>Recall preset</button>
-        <button class="cursor-pointer rounded-lg border border-line bg-panel-2 px-3 py-1.5 font-[inherit] text-inherit hover:border-accent disabled:cursor-not-allowed disabled:opacity-50" on:click={() => ctx.recallPreset(Math.max(1, Math.min(64, preset + 1)))} aria-label="Next preset">▶</button>
+        <button class="btn" on:click={() => ctx.recallPreset(Math.max(1, Math.min(64, preset - 1)))} aria-label="Previous preset">◀</button>
+        <button class="btn" on:click={() => ctx.recallPreset(preset)}>Recall preset</button>
+        <button class="btn" on:click={() => ctx.recallPreset(Math.max(1, Math.min(64, preset + 1)))} aria-label="Next preset">▶</button>
       </div>
       <h3 class="mb-2 mt-3.5 text-xs uppercase tracking-[0.08em] text-muted">Edited presets</h3>
       <div class="flex flex-wrap items-center gap-1">
@@ -311,21 +332,21 @@
 
   <section class="min-w-0 flex-1">
     <h2 class="m-0 mb-3 text-lg">Editor <span class="text-muted text-xs">— NANOCORE preset {preset}</span></h2>
-    <div class="mb-3 rounded-xl border border-line bg-panel p-3.5 flex flex-wrap items-start justify-between gap-3">
+    <div class="card mb-3 border border-base-300 bg-base-200 p-3.5 flex flex-wrap items-start justify-between gap-3">
       <div class="mb-2.5 flex flex-wrap items-center gap-2">
         <span class="font-semibold">Preset {preset}</span>
-        <input data-editor="preset-name" class="rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit" aria-label="Preset name" placeholder="Preset name (max 8 characters)"
+        <input data-editor="preset-name" class="input input-bordered input-sm" aria-label="Preset name" placeholder="Preset name (max 8 characters)"
           bind:value={nameDraft} on:change={changeName}>
         <label class="text-xs text-muted" for="editor-preset">NANOCORE preset</label>
-        <select id="editor-preset" class="rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit flex-1" value={preset} on:change={(event) => ctx.recallPreset(Number(event.currentTarget.value))}>
+        <select id="editor-preset" class="select select-bordered select-sm flex-1" value={preset} on:change={(event) => ctx.recallPreset(Number(event.currentTarget.value))}>
           {#each presetNumbers as number (number)}
             <option value={number} selected={number === preset}>{number} · {ctx.presetLabel(number)}</option>
           {/each}
         </select>
-        <button data-action="save-preset-name" class="cursor-pointer rounded-lg border border-line bg-transparent px-3 py-1.5 font-[inherit] text-inherit hover:border-accent disabled:cursor-not-allowed disabled:opacity-50" title="Write this name to the NANOCORE and save the preset"
+        <button data-action="save-preset-name" class="btn btn-ghost" title="Write this name to the NANOCORE and save the preset"
           on:click={() => ctx.renamePresetOnDevice(nameDraft)}>Save name to pedal</button>
-        <button id="editor-read" class="cursor-pointer rounded-lg border border-line bg-panel-2 px-3 py-1.5 font-[inherit] text-inherit hover:border-accent disabled:cursor-not-allowed disabled:opacity-50" on:click={() => ctx.readSnapshot()}>Read snapshot</button>
-        <button id="save-preset" class="cursor-pointer rounded-lg border border-accent bg-accent px-3 py-1.5 font-[inherit] font-bold text-[#1a1206] hover:border-accent disabled:cursor-not-allowed disabled:opacity-50" title="Write live RAM permanently into this NANOCORE preset"
+        <button id="editor-read" class="btn" on:click={() => ctx.readSnapshot()}>Read snapshot</button>
+        <button id="save-preset" class="btn btn-primary" title="Write live RAM permanently into this NANOCORE preset"
           on:click={() => ctx.savePreset()}>Save to pedal</button>
       </div>
       <div class="text-muted text-xs">
@@ -338,7 +359,7 @@
     </div>
 
 {#if !snapshot}
-  <div class="mb-3 rounded-xl border border-line bg-panel p-3.5">
+  <div class="card mb-3 border border-base-300 bg-base-200 p-3.5">
     <p class="text-muted">Connect to the NANOCORE and press <b>Read snapshot</b>.</p>
     <p class="text-xs">If recall works but parameters stay blank, open <b>MIDI devices</b> and mark one input as "NANOCORE replies", then read again.</p>
   </div>
@@ -371,17 +392,23 @@
           <span class="font-extrabold">{definition.name}</span>
           <span class="text-[11px] text-muted">{assetName || effectType?.name || (id === 'amp' || id === 'cab' ? 'loading…' : '—')}</span>
           <span class="text-[11px] text-muted">{item.enabled ? 'ON' : 'off'}</span>
-          <span class="rounded-full border border-line px-2 py-0.5 text-[11px]">{fs ?? 'no stomp'}</span>
+          <span class="badge badge-outline badge-sm">{fs ?? 'no stomp'}</span>
         </button>
       {/if}
     {/each}
   </div>
 
-  <div class="mb-3 rounded-xl border border-line bg-panel p-3.5">
+  <div class="card mb-3 border border-base-300 bg-base-200 p-3.5">
     {#if block && live}
       <div class="flex items-center justify-between">
-        <h2 style="margin:0" class="m-0 mb-3 text-lg">{block.name}</h2>
-        <select aria-label={`${block.name} type`} class="rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit" value={selectedSlot}
+        <div class="flex items-center">
+          <h2 style="margin:0" class="m-0 mb-3 text-lg">{block.name}</h2>
+          <label class="label text-sm text-muted flex items-center">
+            <input type="checkbox" class="toggle toggle-sm" checked={Boolean(live.enabled)} on:change={changeEnabled}>
+            ON/OFF 
+          </label>
+        </div>
+        <select aria-label={`${block.name} type`} class="select select-bordered select-sm" value={selectedSlot}
           on:change={changeType}>
           {#if !assetNames?.length && (selected === 'amp' || selected === 'cab')}
             <option value={live.variant}>Loading names from pedal…</option>
@@ -391,25 +418,30 @@
             {/each}
           {/if}
         </select>
-        <label class="text-xs text-muted">
-          <input type="checkbox" class="rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit" checked={Boolean(live.enabled)} on:change={changeEnabled}>
-          <span></span> {live.enabled ? 'On' : 'Off'}
-        </label>
+        <div class="flex items-center">
+          <div class="join border h-fit">
+          <div class="btn btn-xs btn-disabled">Stomp</div>
+            {#each globals.footswitches ?? [] as fs (fs.id)}
+              <input type="radio" class="join-item btn btn-soft btn-xs" name="options" checked={stompId === fs.id} aria-label={fs.id} on:click={() => ctx.setBlockStomp(preset, selected, fs.id)}>
+            {/each}
+            <input type="radio" class="join-item btn btn-soft btn-xs" name="options" aria-label="None" checked={!stompId} on:click={() => ctx.setBlockStomp(preset, selected, null)}>
+          </div>
+          <label class="label text-sm text-muted min-w-[90px]">
+            Scene
+            <input type="checkbox" class="toggle toggle-sm toggle-primary" checked={sceneOn} on:change={requestSceneBlock}>
+          </label>
+        </div>
       </div>
       {#if warning}<div class="border-accent text-accent">{warning}</div>{/if}
 
       <div class="mb-2.5 flex flex-wrap items-center gap-2">
-        <label class="text-xs text-muted min-w-[90px]">
-          <input type="checkbox" class="rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit" checked={sceneOn} on:change={(event) => ctx.setSceneBlock(selected, event.currentTarget.checked)}>
-          <span></span> Participate in scenes
-        </label>
-        <span class="text-muted text-xs">Off hides the scenes here and leaves this block out of scene saves and recalls; previously saved values are kept.</span>
+        <span class="text-muted text-xs">Scene off removes this block from scene saves and recalls and forgets its stored values.</span>
       </div>
 
       {#if timeParams}
         <div class="mb-2.5 flex flex-wrap items-center gap-2">
           <label class="text-xs text-muted min-w-[90px]">
-            <input type="checkbox" class="rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit" checked={sync.enabled} on:change={(event) => ctx.setTempoSync(selected, { enabled: event.currentTarget.checked })}>
+            <input type="checkbox" class="checkbox checkbox-sm checkbox-primary" checked={sync.enabled} on:change={(event) => ctx.setTempoSync(selected, { enabled: event.currentTarget.checked })}>
             <span></span> Sync with tempo
           </label>
           <span class="text-muted text-xs">Replaces the time knob with a note subdivision. {globals.tempo?.bpm ? '' : 'Tap a tempo in the top bar first.'}</span>
@@ -418,7 +450,7 @@
       {#if tempoSynced}
         <div class="mb-2.5 flex flex-wrap items-center gap-2">
           <label for="tempo-subdivision" class="text-xs text-muted min-w-[90px]">Delay subdivision</label>
-          <select id="tempo-subdivision" class="rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit" value={sync.subdivision}
+          <select id="tempo-subdivision" class="select select-bordered select-sm" value={sync.subdivision}
             on:change={(event) => ctx.setTempoSync(selected, { subdivision: event.currentTarget.value })}>
             {#each SUBDIVISIONS as subdivision (subdivision.id)}
               <option value={subdivision.id} selected={subdivision.id === sync.subdivision}>{subdivision.label} ({subdivision.id})</option>
@@ -431,14 +463,14 @@
       <h3 class="mb-2 mt-3.5 text-xs uppercase tracking-[0.08em] text-muted">Expression mapping <span class="text-muted text-xs">— assign by right-clicking a knob</span></h3>
       <div class="my-2 flex flex-wrap gap-2">
         {#each badges as badge (badge.id)}
-          <span class="rounded-full border border-line px-2 py-0.5 text-[11px] text-muted {badge.assigned ? 'border-accent text-text' : ''}"
+          <span class="badge badge-outline badge-sm text-muted {badge.assigned ? 'border-accent text-text' : ''}"
             title={badge.globalVolume ? 'Assigned to preset volume in Globals — clear it there to free this pedal' : undefined}>
             <b>{badge.id}</b> {badge.target}
           </span>
         {/each}
       </div>
 
-      <h3 class="mb-2 mt-3.5 text-xs uppercase tracking-[0.08em] text-muted">Stomp switch <span class="text-muted text-xs">— one footswitch can drive this block</span></h3>
+      <!-- <h3 class="mb-2 mt-3.5 text-xs uppercase tracking-[0.08em] text-muted">Stomp switch <span class="text-muted text-xs">— one footswitch can drive this block</span></h3>
       <div class="my-2 flex flex-wrap gap-2">
         {#each globals.footswitches ?? [] as fs (fs.id)}
           <button class="flex min-w-[120px] flex-col gap-1 rounded-[10px] border border-line bg-panel-2 p-2.5 cursor-pointer font-[inherit] text-inherit text-left hover:border-accent disabled:cursor-not-allowed disabled:opacity-50 {stompId === fs.id ? 'border-accent bg-[#30281b]' : ''}"
@@ -449,7 +481,7 @@
         <button class="flex min-w-[120px] flex-col gap-1 rounded-[10px] border border-line bg-panel-2 p-2.5 cursor-pointer font-[inherit] text-inherit text-left hover:border-accent disabled:cursor-not-allowed disabled:opacity-50 {!stompId ? 'border-accent bg-[#30281b]' : ''}" on:click={() => ctx.setBlockStomp(preset, selected, null)}>
           <b>None</b><span class="text-muted text-xs">unassigned</span>
         </button>
-      </div>
+      </div> -->
 
       {#if sceneOn}
         <h3 class="mb-2 mt-3.5 text-xs uppercase tracking-[0.08em] text-muted">Scenes <span class="text-muted text-xs">— store the current parameter values, recall instantly</span></h3>
@@ -468,13 +500,13 @@
         <div class="mb-2.5 flex flex-wrap items-center gap-1">
           {#each scenes.filter((scene) => scene.key !== 'base') as scene (scene.key)}
             <label for={`scene-rename-${scene.key}`} class="text-xs text-muted min-w-[90px]">{scene.name}</label>
-            <input id={`scene-rename-${scene.key}`} class="rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit" data-scene-rename={scene.key} value={scene.name}
+            <input id={`scene-rename-${scene.key}`} class="input input-bordered input-sm" data-scene-rename={scene.key} value={scene.name}
               aria-label={`Rename ${scene.name}`}
               on:change={(event) => ctx.renameScene(scene.key, event.currentTarget.value)}>
           {/each}
         </div>
       {:else}
-        <p class="text-muted text-xs">Scenes are hidden for this block. Switch “Participate in scenes” back on to resume — saved values are not discarded.</p>
+        <p class="text-muted text-xs">Scenes are hidden for this block. Switch Scene participation back on to resume — forgotten values are not restored.</p>
       {/if}
 
       <h3 class="mb-2 mt-3.5 text-xs uppercase tracking-[0.08em] text-muted">Parameters <span class="text-muted text-xs">— right-click a parameter to assign an expression pedal</span></h3>
@@ -530,6 +562,22 @@
 
 {#if popupTarget}
   <PedalPopup target={popupTarget} onClose={() => { popupTarget = null; }} />
+{/if}
+
+{#if sceneOffBlock}
+  <div class="modal modal-open z-[90]" role="presentation">
+    <button class="modal-backdrop" aria-label="Cancel" on:click={() => { sceneOffBlock = null; }}></button>
+    <div class="modal-box w-[min(440px,94vw)] max-w-none" role="dialog" aria-modal="true" aria-label="Forget scene values">
+      <h2 class="m-0 mb-3 text-lg">Remove {BLOCK_BY_ID[sceneOffBlock]?.name ?? sceneOffBlock} from scenes?</h2>
+      <p class="text-muted text-xs">
+        This forgets {forgetCount} saved {forgetCount === 1 ? 'value' : 'values'} for this block in this preset's scenes and base snapshot. Turning participation back on will not restore them.
+      </p>
+      <div class="mt-4 flex justify-end gap-2">
+        <button class="btn" on:click={() => { sceneOffBlock = null; }}>Cancel</button>
+        <button class="btn btn-error" on:click={confirmSceneBlockOff}>Forget values</button>
+      </div>
+    </div>
+  </div>
 {/if}
   </section>
 </div>

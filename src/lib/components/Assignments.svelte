@@ -71,7 +71,7 @@
 </script>
 
 {#if tableOnly}
-  <table class="w-full border-collapse text-xs">
+  <table class="table table-xs">
     <thead><tr><th class="border-b border-line px-1.5 py-1.5 text-left">Virtual pedal</th><th class="border-b border-line px-1.5 py-1.5 text-left">IN (controller)</th><th class="border-b border-line px-1.5 py-1.5 text-left">OUT (NANOCORE)</th></tr></thead>
     <tbody>
       {#each footswitches as fs (fs.id)}
@@ -104,9 +104,9 @@
     <div data-binding class="mb-2 rounded-[10px] border border-line bg-panel-2 p-2.5">
       <div class="mb-2.5 flex flex-wrap items-center gap-2">
         <label for={`asg-label-${fs.id}`} class="text-xs text-muted min-w-[90px]">{fs.name} · {ctx.describeTrigger(fs.trigger)}</label>
-        <input id={`asg-label-${fs.id}`} class="rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit" data-asg="stomp-label" placeholder="Button label" value={binding.label ?? ''}
+        <input id={`asg-label-${fs.id}`} class="input input-bordered input-sm" data-asg="stomp-label" placeholder="Button label" value={binding.label ?? ''}
           on:change={(event) => onStompLabel(event, fs.id)}>
-        <select data-asg="stomp-mode" class="rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit" value={fixed === 127 ? 'on' : fixed === 0 ? 'off' : mode}
+        <select data-asg="stomp-mode" class="select select-bordered select-sm" value={fixed === 127 ? 'on' : fixed === 0 ? 'off' : mode}
           on:change={(event) => onStompMode(event, fs.id)}>
           <option value="value" selected={mode === 'value' && fixed === undefined}>Incoming value</option>
           <option value="toggle" selected={mode === 'toggle'}>Toggle</option>
@@ -117,7 +117,7 @@
       <div class="mb-2.5 flex flex-wrap items-center gap-2">
         {#each BLOCKS as block (block.id)}
           <label class="text-xs text-muted min-w-[90px]">
-            <input type="checkbox" class="rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit" data-asg="stomp-target" data-fs={fs.id} data-block={block.id}
+            <input type="checkbox" class="checkbox checkbox-sm checkbox-primary" data-asg="stomp-target" data-fs={fs.id} data-block={block.id}
               checked={binding.targets.some((target) => target.block === block.id)}
               on:change={(event) => onStompTarget(event, fs.id)}>
             {block.name}
@@ -134,26 +134,26 @@
     <div data-binding class="mb-2 rounded-[10px] border border-line bg-panel-2 p-2.5">
       <div class="mb-2.5 flex flex-wrap items-center gap-2">
         <label for={`asg-expr-cc-${index}`} class="text-xs text-muted min-w-[90px]">Expression {index + 1}</label>
-        <input id={`asg-expr-cc-${index}`} class="rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit" data-asg="expr-cc" type="number" min="0" max="127"
+        <input id={`asg-expr-cc-${index}`} class="input input-bordered input-sm" data-asg="expr-cc" type="number" min="0" max="127"
           value={entry.trigger?.number ?? 7}
           on:change={(event) => patchExpression(index, { trigger: { ...entry.trigger, number: Number(event.currentTarget.value) } })}>
         <span class="text-muted text-xs">{ctx.describeTrigger(entry.trigger)}</span>
-        <button class="cursor-pointer rounded-lg border border-line bg-panel-2 px-2 py-1 font-[inherit] text-danger text-xs hover:border-accent disabled:cursor-not-allowed disabled:opacity-50" on:click={() => removeExpression(index)}>Remove</button>
+        <button class="btn btn-sm text-error" on:click={() => removeExpression(index)}>Remove</button>
       </div>
       <div class="mb-2.5 flex flex-wrap items-center gap-2">
         <label for={`asg-expr-block-${index}`} class="text-xs text-muted min-w-[90px]">Target</label>
-        <select id={`asg-expr-block-${index}`} class="rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit" value={entry.target}
+        <select id={`asg-expr-block-${index}`} class="select select-bordered select-sm" value={entry.target}
           on:change={(event) => patchExpression(index, { target: event.currentTarget.value })}>
           {#each BLOCKS as block (block.id)}
             <option value={block.id} selected={entry.target === block.id}>{block.name}</option>
           {/each}
         </select>
         <label for={`asg-expr-param-${index}`} class="text-xs text-muted min-w-[90px]">Param #</label>
-        <input id={`asg-expr-param-${index}`} class="rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit" data-asg="expr-param" type="number" min="0" max="11"
+        <input id={`asg-expr-param-${index}`} class="input input-bordered input-sm" data-asg="expr-param" type="number" min="0" max="11"
           value={entry.paramIndex ?? 0}
           on:change={(event) => patchExpression(index, { paramIndex: Number(event.currentTarget.value) })}>
         <label for={`asg-expr-mode-${index}`} class="text-xs text-muted min-w-[90px]">Mode</label>
-        <select id={`asg-expr-mode-${index}`} class="rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit" value={entry.invert || entry.mode === 'invert' ? 'invert' : 'value'}
+        <select id={`asg-expr-mode-${index}`} class="select select-bordered select-sm" value={entry.invert || entry.mode === 'invert' ? 'invert' : 'value'}
           on:change={(event) => patchExpression(index, { invert: event.currentTarget.value === 'invert', mode: event.currentTarget.value })}>
           <option value="value">Normal</option>
           <option value="invert">Inverted</option>
@@ -164,11 +164,11 @@
   {:else}
     <p class="text-muted text-xs">No expression pedals assigned to this preset.</p>
   {/each}
-  <button class="cursor-pointer rounded-lg border border-line bg-panel-2 px-3 py-1.5 font-[inherit] text-inherit hover:border-accent disabled:cursor-not-allowed disabled:opacity-50" on:click={addExpression}>+ Add expression pedal</button>
+  <button class="btn" on:click={addExpression}>+ Add expression pedal</button>
 
   <details>
     <summary>Raw assignments</summary>
-    <table class="w-full border-collapse text-xs">
+    <table class="table table-xs">
       <thead><tr><th class="border-b border-line px-1.5 py-1.5 text-left">Virtual pedal</th><th class="border-b border-line px-1.5 py-1.5 text-left">IN (controller)</th><th class="border-b border-line px-1.5 py-1.5 text-left">OUT (NANOCORE)</th></tr></thead>
       <tbody>
         {#each footswitches as fs (fs.id)}

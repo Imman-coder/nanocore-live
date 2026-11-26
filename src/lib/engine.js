@@ -923,9 +923,13 @@ export const ctx = {
   toggleLiveEdit() { update({ liveEditing: !state.liveEditing }); },
   startLiveEdit() { update({ mode: 'live', liveEditing: true }); },
   openLiveLayout() { ctx.startLiveEdit(); },
-  setSceneBlock(blockId, participates) {
-    update(markPresetEdited(setSceneBlock(state, state.activePreset, blockId, participates), state.activePreset));
-    notify(`${BLOCK_BY_ID[blockId]?.name ?? blockId} ${participates ? 'now participates in scenes' : 'excluded from scenes — saved values kept'}`);
+  setSceneBlock(blockId, participates, options = {}) {
+    update(markPresetEdited(setSceneBlock(state, state.activePreset, blockId, participates, options), state.activePreset));
+    notify(participates
+      ? `${BLOCK_BY_ID[blockId]?.name ?? blockId} now participates in scenes`
+      : options.forgetValues
+        ? `${BLOCK_BY_ID[blockId]?.name ?? blockId} excluded — saved values forgotten`
+        : `${BLOCK_BY_ID[blockId]?.name ?? blockId} excluded — saved values kept`);
   },
   setVolume(value) {
     if (!snapshot) return;

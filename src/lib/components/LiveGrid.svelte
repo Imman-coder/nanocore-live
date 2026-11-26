@@ -208,7 +208,7 @@
       style:grid-area={`${cell.row} / ${cell.col}`}
     >
       {#if editing}
-        <select data-grid-cell={`${cell.row}:${cell.col}`} class="w-full text-base rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit" value="empty" aria-label={`Item at row ${cell.row}, column ${cell.col}`}
+        <select data-grid-cell={`${cell.row}:${cell.col}`} class="w-full text-base select select-bordered select-sm" value="empty" aria-label={`Item at row ${cell.row}, column ${cell.col}`}
           on:change={(event) => onEmptySelect(cell, event)}>
           {#each choices as choice (choice.id)}
             <option value={choice.id}>{choice.label}</option>
@@ -258,7 +258,7 @@
       {:else if item.kind === 'preset' && item.ref === 'dropdown'}
         <div class="flex h-full min-h-0 w-full flex-col gap-1 rounded-[10px] bg-panel p-2.5 text-left">
           <div class="font-bold">Preset</div>
-          <select data-preset-select="1" class="w-full text-base rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit" aria-label="Select preset" value={state.activePreset}
+          <select data-preset-select="1" class="w-full text-base select select-bordered select-sm" aria-label="Select preset" value={state.activePreset}
             on:change={(event) => ctx.recallPreset(Number(event.currentTarget.value))}>
             {#each presets as preset (preset.number)}
               <option value={preset.number} selected={preset.number === state.activePreset}>{preset.number} · {preset.label}</option>
@@ -274,7 +274,7 @@
       {/if}
 
       {#if editing}
-        <select data-grid-cell-item={item.id} class="absolute left-0.5 right-0.5 top-0.5 z-[3] w-full text-base rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit" aria-label="Change this tile"
+        <select data-grid-cell-item={item.id} class="absolute left-0.5 right-0.5 top-0.5 z-[3] w-full text-base select select-bordered select-sm" aria-label="Change this tile"
           value={item.kind === 'tap' ? 'tap' : `${item.kind}:${item.ref ?? ''}`}
           on:change={(event) => onCellSelect(item, event)}>
           {#each choices as choice (choice.id)}

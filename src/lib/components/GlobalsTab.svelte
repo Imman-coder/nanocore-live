@@ -91,15 +91,15 @@
 {#each globals.footswitches as fs (fs.id)}
   <div class="mb-2 rounded-[10px] border border-line bg-panel-2 p-2.5">
     <div class="mb-2.5 flex flex-wrap items-center gap-2">
-      <label class="text-xs text-muted min-w-[90px]">Name <input data-global="fs-name" data-fs={fs.id} type="text" bind:value={fs.name} class="rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit" /></label>
-      <label class="text-xs text-muted min-w-[90px]">Trigger <select data-global="fs-type" data-fs={fs.id} bind:value={fs.trigger.type} class="rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit">
+      <label class="text-xs text-muted min-w-[90px]">Name <input data-global="fs-name" data-fs={fs.id} type="text" bind:value={fs.name} class="input input-bordered input-sm" /></label>
+      <label class="text-xs text-muted min-w-[90px]">Trigger <select data-global="fs-type" data-fs={fs.id} bind:value={fs.trigger.type} class="select select-bordered select-sm">
         <option value="cc">CC</option>
         <option value="pc">PC</option>
         <option value="note">NOTE</option>
       </select></label>
-      <label class="text-xs text-muted min-w-[90px]">Channel <input data-global="fs-channel" data-fs={fs.id} type="number" min="1" max="16" bind:value={fs.trigger.channel} class="rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit" /></label>
-      <label class="text-xs text-muted min-w-[90px]">Number <input data-global="fs-number" data-fs={fs.id} type="number" min="0" max="127" bind:value={fs.trigger.number} class="rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit" /></label>
-      <button class="cursor-pointer rounded-lg border border-line bg-panel-2 px-2 py-1 font-[inherit] text-xs text-inherit hover:border-accent disabled:cursor-not-allowed disabled:opacity-50" data-global="learn" data-fs={fs.id} on:click={(event) => learn(fs.id, event.currentTarget)}>Learn</button>
+      <label class="text-xs text-muted min-w-[90px]">Channel <input data-global="fs-channel" data-fs={fs.id} type="number" min="1" max="16" bind:value={fs.trigger.channel} class="input input-bordered input-sm" /></label>
+      <label class="text-xs text-muted min-w-[90px]">Number <input data-global="fs-number" data-fs={fs.id} type="number" min="0" max="127" bind:value={fs.trigger.number} class="input input-bordered input-sm" /></label>
+      <button class="btn btn-sm" data-global="learn" data-fs={fs.id} on:click={(event) => learn(fs.id, event.currentTarget)}>Learn</button>
       <span class="text-xs text-muted">{ctx.describeTrigger(fs.trigger)}</span>
     </div>
   </div>
@@ -110,22 +110,22 @@
 {#each globals.expressionPedals as pedal (pedal.id)}
   <div class="mb-2 rounded-[10px] border border-line bg-panel-2 p-2.5">
     <div class="mb-2.5 flex flex-wrap items-center gap-2">
-      <label class="text-xs text-muted min-w-[90px]">Name <input data-global="fs-name" data-fs={pedal.id} type="text" bind:value={pedal.name} class="rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit" /></label>
-      <label class="text-xs text-muted min-w-[90px]">Trigger <select data-global="fs-type" data-fs={pedal.id} bind:value={pedal.trigger.type} class="rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit">
+      <label class="text-xs text-muted min-w-[90px]">Name <input data-global="fs-name" data-fs={pedal.id} type="text" bind:value={pedal.name} class="input input-bordered input-sm" /></label>
+      <label class="text-xs text-muted min-w-[90px]">Trigger <select data-global="fs-type" data-fs={pedal.id} bind:value={pedal.trigger.type} class="select select-bordered select-sm">
         <option value="cc">CC</option>
         <option value="pc">PC</option>
         <option value="note">NOTE</option>
       </select></label>
-      <label class="text-xs text-muted min-w-[90px]">Channel <input data-global="fs-channel" data-fs={pedal.id} type="number" min="1" max="16" bind:value={pedal.trigger.channel} class="rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit" /></label>
-      <label class="text-xs text-muted min-w-[90px]">Number <input data-global="fs-number" data-fs={pedal.id} type="number" min="0" max="127" bind:value={pedal.trigger.number} class="rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit" /></label>
-      <button class="cursor-pointer rounded-lg border border-line bg-panel-2 px-2 py-1 font-[inherit] text-xs text-inherit hover:border-accent disabled:cursor-not-allowed disabled:opacity-50" data-global="learn" data-fs={pedal.id} on:click={(event) => learn(pedal.id, event.currentTarget)}>Learn</button>
-      <label class="text-xs text-muted min-w-[90px]"><input type="checkbox" data-global="fs-full-touch" data-fs={pedal.id} bind:checked={pedal.fullTouch} class="rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit" /> Full touch control in Live</label>
+      <label class="text-xs text-muted min-w-[90px]">Channel <input data-global="fs-channel" data-fs={pedal.id} type="number" min="1" max="16" bind:value={pedal.trigger.channel} class="input input-bordered input-sm" /></label>
+      <label class="text-xs text-muted min-w-[90px]">Number <input data-global="fs-number" data-fs={pedal.id} type="number" min="0" max="127" bind:value={pedal.trigger.number} class="input input-bordered input-sm" /></label>
+      <button class="btn btn-sm" data-global="learn" data-fs={pedal.id} on:click={(event) => learn(pedal.id, event.currentTarget)}>Learn</button>
+      <label class="text-xs text-muted min-w-[90px]"><input type="checkbox" data-global="fs-full-touch" data-fs={pedal.id} bind:checked={pedal.fullTouch} class="checkbox checkbox-sm checkbox-primary" /> Full touch control in Live</label>
     </div>
   </div>
 {/each}
 
 <div class="mb-2.5 flex flex-wrap items-center gap-2">
-  <label class="text-xs text-muted min-w-[90px]">Preset volume pedal <select data-global="volume-pedal" bind:value={globals.volumePedal} class="rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit">
+  <label class="text-xs text-muted min-w-[90px]">Preset volume pedal <select data-global="volume-pedal" bind:value={globals.volumePedal} class="select select-bordered select-sm">
     <option value="">None</option>
     {#each globals.expressionPedals as pedal (pedal.id)}
       <option value={pedal.id}>{pedal.name}</option>
@@ -135,32 +135,32 @@
 </div>
 
 <div class="mb-2.5 flex flex-wrap items-center gap-2">
-  <label class="text-xs text-muted min-w-[90px]"><input type="checkbox" data-global="interactive-live" bind:checked={globals.interactiveLive} class="rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit" /> Interactive Live mode</label>
+  <label class="text-xs text-muted min-w-[90px]"><input type="checkbox" data-global="interactive-live" bind:checked={globals.interactiveLive} class="checkbox checkbox-sm checkbox-primary" /> Interactive Live mode</label>
   <span class="text-xs text-muted">Let the Live expression meters be dragged or arrow-keyed to control assigned parameters.</span>
 </div>
 <div class="mb-2.5 flex flex-wrap items-center gap-2">
-  <label class="text-xs text-muted min-w-[90px]"><input type="checkbox" data-global="absolute-expression" bind:checked={globals.absoluteExpression} class="rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit" /> Absolute expression faders</label>
+  <label class="text-xs text-muted min-w-[90px]"><input type="checkbox" data-global="absolute-expression" bind:checked={globals.absoluteExpression} class="checkbox checkbox-sm checkbox-primary" /> Absolute expression faders</label>
   <span class="text-xs text-muted">Off (default): dragging slides the value relatively from where you pressed. On: the touch position sets the value directly.</span>
 </div>
 
 <h3 class="mb-2 mt-3.5 text-xs uppercase tracking-[0.08em] text-muted">Tempo</h3>
 <div class="mb-2.5 flex flex-wrap items-center gap-2"><label class="text-xs text-muted min-w-[90px]"><input type="checkbox" data-global="tempo-sync" checked={globals.tempoSync !== false} on:change={(event) => (globals.tempoSync = event.currentTarget.checked)} class="rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit" /> Sync delay time to tap tempo</label></div>
 <div class="mb-2.5 flex flex-wrap items-center gap-2">
-  <label class="text-xs text-muted min-w-[90px]">Tap tempo trigger <select data-tap="type" bind:value={globals.tapTempoSwitch.trigger.type} class="rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit">
+  <label class="text-xs text-muted min-w-[90px]">Tap tempo trigger <select data-tap="type" bind:value={globals.tapTempoSwitch.trigger.type} class="select select-bordered select-sm">
     <option value="cc">CC</option>
     <option value="pc">PC</option>
     <option value="note">NOTE</option>
   </select></label>
-  <label class="text-xs text-muted min-w-[90px]">Channel <input data-tap="channel" type="number" min="1" max="16" bind:value={globals.tapTempoSwitch.trigger.channel} class="rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit" /></label>
-  <label class="text-xs text-muted min-w-[90px]">Number <input data-tap="number" type="number" min="0" max="127" bind:value={globals.tapTempoSwitch.trigger.number} class="rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit" /></label>
-  <button class="cursor-pointer rounded-lg border border-line bg-panel-2 px-2 py-1 font-[inherit] text-xs text-inherit hover:border-accent disabled:cursor-not-allowed disabled:opacity-50" data-global="learn" data-fs={globals.tapTempoSwitch.id} on:click={(event) => learn(globals.tapTempoSwitch.id, event.currentTarget)}>Learn</button>
+  <label class="text-xs text-muted min-w-[90px]">Channel <input data-tap="channel" type="number" min="1" max="16" bind:value={globals.tapTempoSwitch.trigger.channel} class="input input-bordered input-sm" /></label>
+  <label class="text-xs text-muted min-w-[90px]">Number <input data-tap="number" type="number" min="0" max="127" bind:value={globals.tapTempoSwitch.trigger.number} class="input input-bordered input-sm" /></label>
+  <button class="btn btn-sm" data-global="learn" data-fs={globals.tapTempoSwitch.id} on:click={(event) => learn(globals.tapTempoSwitch.id, event.currentTarget)}>Learn</button>
   <span class="text-xs text-muted">{ctx.describeTrigger(globals.tapTempoSwitch.trigger)}</span>
 </div>
 
 <h3 class="mb-2 mt-3.5 text-xs uppercase tracking-[0.08em] text-muted">Scenes</h3>
 <p class="text-xs text-muted">Base is always available. Choose up to six total scenes and name each one.</p>
 <div class="mb-2.5 flex flex-wrap items-center gap-2">
-  <label class="text-xs text-muted min-w-[90px]">Number of scenes <select data-global="scene-count" bind:value={globals.sceneCount} class="rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit">
+  <label class="text-xs text-muted min-w-[90px]">Number of scenes <select data-global="scene-count" bind:value={globals.sceneCount} class="select select-bordered select-sm">
     {#each [3, 4, 5, 6] as count}
       <option value={count}>{count}</option>
     {/each}
@@ -172,20 +172,20 @@
 {#each globals.sceneSwitches as sw (sw.id)}
   <div class="mb-2 rounded-[10px] border border-line bg-panel-2 p-2.5">
     <div class="mb-2.5 flex flex-wrap items-center gap-2">
-      <label class="text-xs text-muted min-w-[90px]">Name <input data-global="scene-name" data-scene-id={sw.id} type="text" bind:value={sw.name} class="rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit" /></label>
-      <label class="text-xs text-muted min-w-[90px]">Recalls <select data-global="scene-target" data-scene-id={sw.id} bind:value={sw.scene} class="rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit">
+      <label class="text-xs text-muted min-w-[90px]">Name <input data-global="scene-name" data-scene-id={sw.id} type="text" bind:value={sw.name} class="input input-bordered input-sm" /></label>
+      <label class="text-xs text-muted min-w-[90px]">Recalls <select data-global="scene-target" data-scene-id={sw.id} bind:value={sw.scene} class="select select-bordered select-sm">
         {#each sceneTargets as value}
           <option value={value}>{ctx.sceneName(value)}</option>
         {/each}
       </select></label>
-      <label class="text-xs text-muted min-w-[90px]">Trigger <select data-global="scene-type" data-scene-id={sw.id} bind:value={sw.trigger.type} class="rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit">
+      <label class="text-xs text-muted min-w-[90px]">Trigger <select data-global="scene-type" data-scene-id={sw.id} bind:value={sw.trigger.type} class="select select-bordered select-sm">
         <option value="cc">CC</option>
         <option value="pc">PC</option>
         <option value="note">NOTE</option>
       </select></label>
-      <label class="text-xs text-muted min-w-[90px]">Channel <input data-global="scene-channel" data-scene-id={sw.id} type="number" min="1" max="16" bind:value={sw.trigger.channel} class="rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit" /></label>
-      <label class="text-xs text-muted min-w-[90px]">Number <input data-global="scene-number" data-scene-id={sw.id} type="number" min="0" max="127" bind:value={sw.trigger.number} class="rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit" /></label>
-      <button class="cursor-pointer rounded-lg border border-line bg-panel-2 px-2 py-1 font-[inherit] text-xs text-inherit hover:border-accent disabled:cursor-not-allowed disabled:opacity-50" data-global="learn" data-fs={sw.id} on:click={(event) => learn(sw.id, event.currentTarget)}>Learn</button>
+      <label class="text-xs text-muted min-w-[90px]">Channel <input data-global="scene-channel" data-scene-id={sw.id} type="number" min="1" max="16" bind:value={sw.trigger.channel} class="input input-bordered input-sm" /></label>
+      <label class="text-xs text-muted min-w-[90px]">Number <input data-global="scene-number" data-scene-id={sw.id} type="number" min="0" max="127" bind:value={sw.trigger.number} class="input input-bordered input-sm" /></label>
+      <button class="btn btn-sm" data-global="learn" data-fs={sw.id} on:click={(event) => learn(sw.id, event.currentTarget)}>Learn</button>
       <span class="text-xs text-muted">{ctx.describeTrigger(sw.trigger)}</span>
     </div>
   </div>
@@ -193,7 +193,7 @@
 
 <h3 class="mb-2 mt-3.5 text-xs uppercase tracking-[0.08em] text-muted">Device</h3>
 <div class="mb-2.5 flex flex-wrap items-center gap-2">
-  <label class="text-xs text-muted min-w-[90px]">Firmware (FX type lists) <select data-global="firmware" bind:value={globals.firmware} class="rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit">
+  <label class="text-xs text-muted min-w-[90px]">Firmware (FX type lists) <select data-global="firmware" bind:value={globals.firmware} class="select select-bordered select-sm">
     {#each FIRMWARE_OPTIONS as version}
       <option value={version}>{FIRMWARE_LABELS[version] ?? version}</option>
     {/each}
@@ -201,8 +201,8 @@
   <span class="text-xs text-muted">Auto follows the 0x65 settings-layout hint. Newer firmware adds MOD/FX2 types; pick explicitly if Auto is wrong.</span>
 </div>
 <div class="mb-2.5 flex flex-wrap items-center gap-2">
-  <label class="text-xs text-muted min-w-[90px]">MIDI channel <input data-global="midi-channel" type="number" min="1" max="16" bind:value={globals.midiChannel} class="rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit" /></label>
-  <label class="text-xs text-muted min-w-[90px]">Preset recall <select data-global="recall-method" bind:value={globals.recallMethod} class="rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit">
+  <label class="text-xs text-muted min-w-[90px]">MIDI channel <input data-global="midi-channel" type="number" min="1" max="16" bind:value={globals.midiChannel} class="input input-bordered input-sm" /></label>
+  <label class="text-xs text-muted min-w-[90px]">Preset recall <select data-global="recall-method" bind:value={globals.recallMethod} class="select select-bordered select-sm">
     <option value="sysex">Device preset recall</option>
     <option value="pc">Program Change</option>
   </select></label>
@@ -210,8 +210,8 @@
 
 <h3 class="mb-2 mt-3.5 text-xs uppercase tracking-[0.08em] text-muted">Persistence</h3>
 <p class="text-xs text-muted">Bindings are stored in this browser only, never on the pedal.</p>
-<button class="cursor-pointer rounded-lg border border-line bg-panel-2 px-2 py-1 font-[inherit] text-xs text-inherit hover:border-accent disabled:cursor-not-allowed disabled:opacity-50" data-global="export" on:click={exportJson}>Export JSON</button>
-<button class="cursor-pointer rounded-lg border border-line bg-panel-2 px-2 py-1 font-[inherit] text-xs text-inherit hover:border-accent disabled:cursor-not-allowed disabled:opacity-50" data-global="import" on:click={() => fileInput?.click()}>Import JSON</button>
-<input bind:this={fileInput} id="import-file" type="file" accept="application/json" on:change={importJson} class="rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit" hidden />
-<button class="cursor-pointer rounded-lg border border-line bg-panel-2 px-2 py-1 font-[inherit] text-xs text-danger hover:border-accent disabled:cursor-not-allowed disabled:opacity-50" data-global="reset" on:click={reset}>Reset everything</button>
-<div style="margin-top:18px"><button class="cursor-pointer rounded-lg border border-accent bg-accent px-3 py-1.5 font-[inherit] font-bold text-[#1a1206] hover:border-accent disabled:cursor-not-allowed disabled:opacity-50" data-global="save" on:click={save}>Save globals</button></div>
+<button class="btn btn-sm" data-global="export" on:click={exportJson}>Export JSON</button>
+<button class="btn btn-sm" data-global="import" on:click={() => fileInput?.click()}>Import JSON</button>
+<input bind:this={fileInput} id="import-file" type="file" accept="application/json" on:change={importJson} class="input input-bordered input-sm" hidden />
+<button class="btn btn-sm text-error" data-global="reset" on:click={reset}>Reset everything</button>
+<div style="margin-top:18px"><button class="btn btn-primary" data-global="save" on:click={save}>Save globals</button></div>

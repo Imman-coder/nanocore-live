@@ -113,16 +113,16 @@
 
 <svelte:window on:keydown={(event) => { if (event.key === 'Escape') onClose(); }} />
 
-<div class="fixed inset-0 z-[80] flex items-center justify-center">
-  <button class="absolute inset-0 z-0 grid place-items-center h-full w-full cursor-default rounded-lg border-0 bg-black/60 px-3 py-1.5 font-[inherit] text-inherit hover:border-accent disabled:cursor-not-allowed disabled:opacity-50" aria-label="Close assignment popup" on:click={onClose}></button>
-  <div class="relative z-10 flex flex-col rounded-[14px] border border-line bg-panel h-[min(600px,86vh)] max-h-[86vh] w-[min(640px,94vw)] overflow-hidden overflow-y-auto p-[18px]" role="dialog" aria-modal="true" aria-label="Assign expression pedal">
+<div class="modal modal-open z-[80]">
+  <button class="modal-backdrop z-0" aria-label="Close assignment popup" on:click={onClose}></button>
+  <div class="modal-box relative z-10 flex max-h-[86vh] w-[min(640px,94vw)] max-w-none flex-col overflow-y-auto bg-base-200 p-[18px]" role="dialog" aria-modal="true" aria-label="Assign expression pedal">
     <div class="mb-2.5 flex flex-none items-center justify-between">
       <h2 class="m-0 mb-3 text-lg">Expression pedal → {BLOCK_BY_ID[target?.block]?.name ?? target?.block} / {target?.label}</h2>
-      <button class="cursor-pointer rounded-lg border border-line bg-panel-2 px-2 py-1 font-[inherit] text-inherit text-xs hover:border-accent disabled:cursor-not-allowed disabled:opacity-50" on:click={onClose}>Close</button>
+      <button class="btn btn-sm" on:click={onClose}>Close</button>
     </div>
     <p class="text-muted text-xs">One pedal can drive only one parameter in this preset. Right-click another parameter to reassign it.</p>
     {#if target?.cc === null}
-      <p class="border-accent text-xs text-accent">⚠ This parameter has no documented CC — it uses SysEx. Live sweeps may be less stable and are throttled.</p>
+      <p class="alert alert-warning text-xs">⚠ This parameter has no documented CC — it uses SysEx. Live sweeps may be less stable and are throttled.</p>
     {/if}
 
     <h3 class="mb-2 mt-3.5 text-xs uppercase tracking-[0.08em] text-muted">Pedal</h3>
@@ -143,38 +143,38 @@
     <h3 class="mb-2 mt-3.5 text-xs uppercase tracking-[0.08em] text-muted">Incoming MIDI message</h3>
     <div class="mb-2.5 flex flex-wrap items-center gap-2">
       <label for="popup-type" class="text-xs text-muted min-w-[90px]">Type</label>
-      <select id="popup-type" class="rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit" value={message.type} on:change={(event) => setMessage('type', event.currentTarget.value)}>
+      <select id="popup-type" class="select select-bordered select-sm" value={message.type} on:change={(event) => setMessage('type', event.currentTarget.value)}>
         {#each ['cc', 'note', 'pc'] as type}
           <option value={type} selected={message.type === type}>{type.toUpperCase()}</option>
         {/each}
       </select>
       <label for="popup-channel" class="text-xs text-muted min-w-[90px]">Channel</label>
-      <input id="popup-channel" class="rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit" type="number" min="1" max="16" value={message.channel ?? 1}
+      <input id="popup-channel" class="input input-bordered input-sm" type="number" min="1" max="16" value={message.channel ?? 1}
         on:input={(event) => setMessage('channel', Number(event.currentTarget.value))}>
       <label for="popup-number" class="text-xs text-muted min-w-[90px]">Number</label>
-      <input id="popup-number" class="rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit" type="number" min="0" max="127" value={message.number ?? 0}
+      <input id="popup-number" class="input input-bordered input-sm" type="number" min="0" max="127" value={message.number ?? 0}
         on:input={(event) => setMessage('number', Number(event.currentTarget.value))}>
-      <button class="cursor-pointer rounded-lg border border-line bg-panel-2 px-2 py-1 font-[inherit] text-inherit text-xs hover:border-accent disabled:cursor-not-allowed disabled:opacity-50" on:click={learn}>Learn from pedal</button>
+      <button class="btn btn-sm" on:click={learn}>Learn from pedal</button>
     </div>
 
     <h3 class="mb-2 mt-3.5 text-xs uppercase tracking-[0.08em] text-muted">Value range mapping</h3>
     <div class="mb-2.5 flex flex-wrap items-center gap-2">
       <label for="popup-min" class="text-xs text-muted min-w-[90px]">Pedal min (%)</label>
-      <input id="popup-min" class="rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit" type="number" min="0" max="100" step="1" bind:value={minPercent}>
+      <input id="popup-min" class="input input-bordered input-sm" type="number" min="0" max="100" step="1" bind:value={minPercent}>
       <label for="popup-max" class="text-xs text-muted min-w-[90px]">Pedal max (%)</label>
-      <input id="popup-max" class="rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit" type="number" min="0" max="100" step="1" bind:value={maxPercent}>
+      <input id="popup-max" class="input input-bordered input-sm" type="number" min="0" max="100" step="1" bind:value={maxPercent}>
       <label for="popup-out-min" class="text-xs text-muted min-w-[90px]">Parameter min (%)</label>
-      <input id="popup-out-min" class="rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit" type="number" min="0" max="100" step="1" bind:value={outMinPercent}>
+      <input id="popup-out-min" class="input input-bordered input-sm" type="number" min="0" max="100" step="1" bind:value={outMinPercent}>
       <label for="popup-out-max" class="text-xs text-muted min-w-[90px]">Parameter max (%)</label>
-      <input id="popup-out-max" class="rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit" type="number" min="0" max="100" step="1" bind:value={outMaxPercent}>
-      <label for="popup-invert" class="text-xs text-muted min-w-[90px]"><input id="popup-invert" class="rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit" type="checkbox" bind:checked={invert}> Invert</label>
+      <input id="popup-out-max" class="input input-bordered input-sm" type="number" min="0" max="100" step="1" bind:value={outMaxPercent}>
+      <label for="popup-invert" class="text-xs text-muted min-w-[90px]"><input id="popup-invert" class="checkbox checkbox-sm checkbox-primary" type="checkbox" bind:checked={invert}> Invert</label>
     </div>
     <p class="text-xs text-muted">The pedal window and the parameter window are independent. Values outside the pedal window are clamped.</p>
     {#if error}<p class="border-accent text-accent" role="alert">{error}</p>{/if}
     <div class="mb-1 mt-4 flex flex-wrap items-center gap-2">
-      <button class="cursor-pointer rounded-lg border border-accent bg-accent px-3 py-1.5 font-[inherit] font-bold text-[#1a1206] hover:border-accent disabled:cursor-not-allowed disabled:opacity-50" on:click={save}>{mapping ? 'Update assignment' : 'Assign pedal'}</button>
+      <button class="btn btn-primary" on:click={save}>{mapping ? 'Update assignment' : 'Assign pedal'}</button>
       {#if mapping}<button class="cursor-pointer rounded-lg border border-line bg-panel-2 px-3 py-1.5 font-[inherit] text-danger hover:border-accent disabled:cursor-not-allowed disabled:opacity-50" on:click={remove}>Remove assignment</button>{/if}
-      <button class="cursor-pointer rounded-lg border border-line bg-panel-2 px-3 py-1.5 font-[inherit] text-inherit hover:border-accent disabled:cursor-not-allowed disabled:opacity-50" on:click={onClose}>Cancel</button>
+      <button class="btn" on:click={onClose}>Cancel</button>
     </div>
   </div>
 </div>

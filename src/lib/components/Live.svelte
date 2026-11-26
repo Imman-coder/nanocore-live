@@ -60,35 +60,35 @@
   <div class="mb-2.5 flex flex-wrap items-center gap-2">
     <label class="text-xs text-muted" for="live-columns">Columns
       <input id="live-columns" type="number" min="1" max="64" value={layout.grid?.columns ?? 4}
-        class="rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit"
+        class="input input-bordered input-sm"
         on:change={(event) => ctx.setLiveGrid({ columns: Math.max(1, Math.min(64, Number(event.currentTarget.value) || 1)) })}>
     </label>
     <label class="text-xs text-muted" for="live-rows">Rows
       <input id="live-rows" type="number" min="1" max="64" value={layout.grid?.rows ?? 3}
-        class="rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit"
+        class="input input-bordered input-sm"
         on:change={(event) => ctx.setLiveGrid({ rows: Math.max(1, Math.min(64, Number(event.currentTarget.value) || 1)) })}>
     </label>
-    <button class="cursor-pointer rounded-lg border border-line bg-panel-2 px-3 py-1.5 font-[inherit] text-inherit hover:border-accent disabled:cursor-not-allowed disabled:opacity-50 !border-accent !bg-accent font-bold !text-[#1a1206]" on:click={() => ctx.toggleLiveEdit()}>Done editing</button>
+    <button class="btn btn-primary" on:click={() => ctx.toggleLiveEdit()}>Done editing</button>
     <span class="text-muted text-xs">Pick items in empty cells; drag the right/bottom edge of a tile to span more cells.</span>
   </div>
 {/if}
 
-<div class="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-line bg-panel p-3.5">
+<div class="mb-3 flex flex-wrap items-center gap-2 card border border-base-300 bg-base-200 p-3.5">
   <label class="text-xs text-muted" for="live-preset-select">Current NANOCORE preset</label>
-  <select id="live-preset-select" class="rounded-md border border-line bg-[#0f1319] px-2 py-1.5 font-[inherit] text-inherit" value={preset} on:change={(event) => ctx.recallPreset(Number(event.currentTarget.value))}>
+  <select id="live-preset-select" class="select select-bordered select-sm" value={preset} on:change={(event) => ctx.recallPreset(Number(event.currentTarget.value))}>
     {#each presets as entry (entry.number)}
       <option value={entry.number} selected={entry.number === preset}>{entry.number} · {entry.label}</option>
     {/each}
   </select>
   <div class="mb-2.5 flex flex-wrap items-center gap-2">
-    <button class="cursor-pointer rounded-lg border border-line bg-panel-2 px-3 py-1.5 font-[inherit] text-inherit hover:border-accent disabled:cursor-not-allowed disabled:opacity-50" on:click={() => step(-1)} aria-label="Previous preset">◀</button>
-    <button class="cursor-pointer rounded-lg border border-line bg-panel-2 px-3 py-1.5 font-[inherit] text-inherit hover:border-accent disabled:cursor-not-allowed disabled:opacity-50" on:click={() => ctx.recallPreset(preset)}>Recall</button>
-    <button class="cursor-pointer rounded-lg border border-line bg-panel-2 px-3 py-1.5 font-[inherit] text-inherit hover:border-accent disabled:cursor-not-allowed disabled:opacity-50" on:click={() => step(1)} aria-label="Next preset">▶</button>
+    <button class="btn" on:click={() => step(-1)} aria-label="Previous preset">◀</button>
+    <button class="btn" on:click={() => ctx.recallPreset(preset)}>Recall</button>
+    <button class="btn" on:click={() => step(1)} aria-label="Next preset">▶</button>
   </div>
   {#if edited.length}
     <div class="flex flex-wrap gap-1">
       {#each edited as number (number)}
-        <button class="cursor-pointer rounded-lg border border-line bg-panel-2 px-3 py-1.5 font-[inherit] text-inherit hover:border-accent disabled:cursor-not-allowed disabled:opacity-50 !rounded-full !px-2 !py-0.5 text-[11px]" on:click={() => ctx.recallPreset(number)}>{ctx.presetLabel(number)} · {number}</button>
+        <button class="btn btn-sm rounded-full" on:click={() => ctx.recallPreset(number)}>{ctx.presetLabel(number)} · {number}</button>
       {/each}
     </div>
   {/if}
@@ -105,13 +105,13 @@
 
 {#if !globals.hideAssignmentsButton}
   <p class="my-2 text-center">
-    <button class="cursor-pointer rounded-lg border border-line bg-panel-2 px-3 py-1.5 font-[inherit] text-inherit hover:border-accent disabled:cursor-not-allowed disabled:opacity-50 !bg-transparent" on:click={() => ctx.update({ showAdvanced: !advanced })}>
+    <button class="btn btn-ghost" on:click={() => ctx.update({ showAdvanced: !advanced })}>
       {advanced ? 'Hide' : 'Show'} parameter assignments
     </button>
   </p>
 {/if}
 {#if advanced}
-  <div class="mb-3 rounded-xl border border-line bg-panel p-3.5">
+  <div class="card mb-3 border border-base-300 bg-base-200 p-3.5">
     <h3 class="mb-2 mt-3.5 text-xs uppercase tracking-[0.08em] text-muted">Advanced — raw assignments</h3>
     <Assignments {ctx} tableOnly={true} />
     <p class="text-muted text-xs">Controller ports: {(ctx.ports?.inputs ?? []).filter((port) => port.role === 'controller').map((port) => port.name).join(', ') || 'none'}</p>

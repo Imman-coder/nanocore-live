@@ -385,11 +385,33 @@ export function setBase(state, preset, values, enabled) {
   });
 }
 
-export function setSceneBlock(state, preset, blockId, participates) {
+export function setSceneBlock(state, preset, blockId, participates, options = {}) {
   const record = presetRecord(state, preset);
-  return updatePreset(state, preset, {
+  let next = updatePreset(state, preset, {
     sceneBlocks: { ...record.sceneBlocks, [blockId]: Boolean(participates) },
   });
+  if (participates || !options.forgetValues) return next;
+
+  // Excluding a block is destructive: drop every value it had stored in this
+  // preset's scenes, scene FX states and base snapshot.
+  const prefix = `${blockId}:`;
+  const withoutValues = (map) => Object.fromEntries(
+    Object.entries(map ?? {}).filter(([key]) => !key.startsWith(prefix)),
+  );
+  const updated = presetRecord(next, preset);
+  next = updatePreset(next, preset, {
+    scenes: Object.fromEntries(USER_SCENE_KEYS.map((key) =>
+      [key, withoutValues(updated.scenes?.[key])])),
+    sceneEnabled: Object.fromEntries(USER_SCENE_KEYS.map((key) =>
+      [key, Object.fromEntries(Object.entries(updated.sceneEnabled?.[key] ?? {})
+        .filter(([key2]) => key2 !== blockId))])),
+    base: {
+      values: withoutValues(updated.base?.values),
+      enabled: Object.fromEntries(Object.entries(updated.base?.enabled ?? {})
+        .filter(([key]) => key !== blockId)),
+    },
+  });
+  return next;
 }
 
 export function pedalOwner(state, preset, pedalId) {

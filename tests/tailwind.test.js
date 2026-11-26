@@ -17,6 +17,10 @@ test('Tailwind is configured through PostCSS for the Vite build', () => {
   assert.ok(pkg.devDependencies.tailwindcss);
   assert.ok(pkg.devDependencies.postcss);
   assert.ok(pkg.devDependencies.autoprefixer);
+  assert.ok(pkg.devDependencies.daisyui);
+  assert.match(config, /import daisyui from 'daisyui'/);
+  assert.match(config, /plugins: \[daisyui\]/);
+  assert.match(config, /'base-100': '#0d0f13'/);
   assert.ok(!pkg.dependencies?.['@tailwindcss/vite']);
   assert.doesNotMatch(read('vite.config.js'), /@tailwindcss\/vite/);
 });
@@ -24,9 +28,18 @@ test('Tailwind is configured through PostCSS for the Vite build', () => {
 test('the Tailwind entry stylesheet contains only the three directives', () => {
   const css = read('src/app.css').trim();
   assert.equal(css, '@tailwind base;\n@tailwind components;\n@tailwind utilities;');
+  const sources = [];
   for (const file of readdirSync(new URL('src/lib/components', root))) {
     if (!file.endsWith('.svelte')) continue;
     const source = read(`src/lib/components/${file}`);
     assert.doesNotMatch(source, /<style[\s>]/, `${file} has no component stylesheet`);
+    sources.push(source);
   }
+  const markup = sources.join('\n');
+  assert.match(markup, /class="btn/);
+  assert.match(markup, /card .*bg-base-200/);
+  assert.match(markup, /select select-bordered select-sm/);
+  assert.match(markup, /checkbox checkbox-sm checkbox-primary/);
+  assert.match(markup, /modal modal-open/);
+  assert.match(markup, /tabs tabs-bordered/);
 });
