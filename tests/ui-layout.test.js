@@ -14,6 +14,7 @@ const editor = read('Editor');
 const live = read('Live');
 const grid = read('LiveGrid');
 const fader = read('ExpressionFader');
+const knob = read('Knob');
 
 test('the Svelte shell owns mode switching, settings, log and toast', () => {
   assert.match(app, /data-mode=\{mode\}/);
@@ -97,6 +98,10 @@ test('Editor keeps scenes, stomps, knobs and preset actions', () => {
   assert.match(editor, /requestSceneBlock/);
   assert.match(editor, /forgetValues: true/);
   assert.match(editor, /Forget values/);
+  assert.match(editor, /subdivisionIndex/);
+  assert.match(editor, /entry\.synced/);
+  assert.match(editor, /setSubdivision/);
+  assert.doesNotMatch(editor, /\.filter\(\(\{ param \}\) => !\(tempoSynced/);
 });
 
 test('Live keeps the editable grid and all display item kinds', () => {
@@ -135,6 +140,30 @@ test('expression faders recall values and slide relatively by default', () => {
   assert.match(popup, /btn-primary/);
   assert.match(popup, /Selected:/);
   assert.doesNotMatch(popup, /bg-\[#30281b\]/);
+});
+
+test('Editor knobs draw an outer value preview ring', () => {
+  assert.match(knob, /stroke-dasharray/);
+  assert.match(knob, /-rotate-\[225deg\]/);
+  assert.match(knob, /valueArc/);
+});
+
+test('Live editing suppresses performance triggers', () => {
+  assert.match(grid, /disabled=\{editing\}/);
+  assert.match(fader, /export let editing/);
+  assert.match(fader, /if \(editing\) return/);
+  assert.match(live, /disabled=\{editing\}/);
+});
+
+test('controller expression feedback mirrors into the editor snapshot', () => {
+  assert.match(engine, /noteParameter\(block, index, event\.value \/ 127\)/);
+  assert.match(engine, /event\.value \/ 127/);
+  assert.match(engine, /function applyVolumeFromExpression[\s\S]{0,500}render\(\)/);
+  assert.match(engine, /event\.tempo/);
+  assert.match(editor, /openPopup\(entry\.index, entry\.param, entry\.synced\)/);
+  assert.match(read('PedalPopup'), /target\.tempo/);
+  assert.match(engine, /function subdivisionIndexForRaw/);
+  assert.match(engine, /sendExpression\(pedalId, value\)[\s\S]{0,500}mapping\.tempo/);
 });
 
 test('demo data stays sandboxed in the Svelte engine', () => {

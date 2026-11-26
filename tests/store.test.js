@@ -81,6 +81,13 @@ test('expression bindings are stored per preset', () => {
   assert.equal(assignmentsFor(state, 4).expressions.length, 0);
 });
 
+test('tempo subdivision bindings keep a dedicated router target', () => {
+  const state = setParamPedal(createDefaultState(), 1, 'fx1', 'tempo', { pedal: 'E1', tempo: true });
+  const entry = assignmentsFor(state, 1).expressions[0];
+  assert.equal(entry.tempo, true);
+  assert.equal(entry.target, 'fx1');
+});
+
 test('expression value windows reach the router-facing assignment shape', () => {
   const state = setParamPedal(createDefaultState(), 3, 'fx1', 0, {
     pedal: 'E4', inputMin: 6, inputMax: 121, outputMin: 38, outputMax: 102, invert: true,

@@ -28,15 +28,15 @@
 
   $: preset = $app.state?.activePreset ?? 1;
   $: assignments = ($app.state, ctx.assignments);
-  $: mapping = assignments?.paramPedals?.[`${target?.block}:${target?.paramIndex}`] ?? null;
+  $: ownerKey = `${target?.block}:${target?.tempo ? 'tempo' : target?.paramIndex}`;
+  $: mapping = assignments?.paramPedals?.[ownerKey] ?? null;
   $: pedals = $app.state?.globals?.expressionPedals ?? [];
   $: globalVolumeId = $app.state?.globals?.volumePedal ?? null;
   $: chosen = pedals.find((entry) => entry.id === pedal);
   $: message = trigger ?? chosen?.trigger ?? { type: 'cc', channel: 1, number: 7 };
-  $: ownerKey = `${target?.block}:${target?.paramIndex}`;
 
   function reset() {
-    const current = ctx.assignments?.paramPedals?.[`${target?.block}:${target?.paramIndex}`];
+    const current = ctx.assignments?.paramPedals?.[ownerKey];
     pedal = current?.pedal ?? null;
     trigger = null;
     minPercent = expressionRawToPercent(current?.inputMin ?? 0);
@@ -106,14 +106,17 @@
     const owner = ctx.pedalOwner(preset, pedal);
     if (owner && owner !== ownerKey) {
       const [block, index] = owner.split(':');
-      const label = `${BLOCK_BY_ID[block]?.name ?? block} parameter ${Number(index) + 1}`;
+      const label = index === 'tempo'
+        ? `${BLOCK_BY_ID[block]?.name ?? block} tempo division`
+        : `${BLOCK_BY_ID[block]?.name ?? block} parameter ${Number(index) + 1}`;
       return fail(`${pedal} is already assigned to ${label} in this preset. Unassign it there first.`);
     }
     if (Number(minPercent) >= Number(maxPercent)) return fail('Pedal min % must be lower than max %.');
     if (Number(outMinPercent) >= Number(outMaxPercent)) return fail('Parameter min % must be lower than max %.');
     ctx.setExpressionTrigger(pedal, message);
-    ctx.setParamPedal(preset, target.block, target.paramIndex, {
+    ctx.setParamPedal(preset, target.block, target.tempo ? 'tempo' : target.paramIndex, {
       pedal,
+      ...(target.tempo ? { tempo: true } : {}),
       inputMin: expressionPercentToRaw(minPercent),
       inputMax: expressionPercentToRaw(maxPercent),
       outputMin: expressionPercentToRaw(outMinPercent),
@@ -125,7 +128,7 @@
   }
 
   function remove() {
-    ctx.setParamPedal(preset, target.block, target.paramIndex, null);
+    ctx.setParamPedal(preset, target.block, target.tempo ? 'tempo' : target.paramIndex, null);
     ctx.notify('Pedal assignment removed');
     onClose();
   }

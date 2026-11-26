@@ -9,6 +9,7 @@
 
   export let pedal;
   export let ctx = engineCtx;
+  export let editing = false;
 
   let rootEl;
   let meterEl;
@@ -88,6 +89,7 @@
   }
 
   function startDrag(event) {
+    if (editing) return;
     if (event.button !== undefined && event.button !== 0) return;
     event.preventDefault();
     drag = { id: event.pointerId, x: event.clientX, y: event.clientY, value: raw, vertical };
@@ -121,6 +123,7 @@
   }
 
   function onKey(event) {
+    if (editing) return;
     if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
     event.preventDefault();
     const step = event.key === 'ArrowLeft' || event.key === 'ArrowDown' ? -5 : 5;

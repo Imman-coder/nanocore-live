@@ -316,10 +316,16 @@ function paintExpressionFeedback(pedalId, value) {
   emit();
 }
 
+function subdivisionIndexForRaw(value) {
+  return Math.max(0, Math.min(SUBDIVISIONS.length - 1,
+    Math.floor((Number(value) / 127) * SUBDIVISIONS.length)));
+}
+
 function applyVolumeFromExpression(raw) {
   const volume = Math.max(0, Math.min(100, Math.round(Number(raw) || 0)));
   if (snapshot) snapshot.volume = volume;
   send(buildRequestSysEx(COMMAND.SET_FIELD, [FIELD.VOLUME, volume]), `expression-volume:${state.globals.volumePedal ?? 'none'}`);
+  render();
 }
 
 const router = createRouter({
@@ -334,6 +340,17 @@ const router = createRouter({
     log(`${event.type}: ${JSON.stringify(event).slice(0, 140)}`);
     if (event.type === 'expression') {
       paintExpressionFeedback(event.expression, event.value);
+      if (event.tempo) {
+        ctx.setTempoSync(event.target, { subdivision: SUBDIVISIONS[subdivisionIndexForRaw(event.value)].id });
+        return;
+      }
+      const mapping = currentAssignments().expressions.find((entry) => entry.id === event.expression);
+      const block = typeof mapping?.target === 'object' ? mapping.target.block : mapping?.target;
+      const index = Number(mapping?.paramIndex ?? 0);
+      if (block && Number.isInteger(index)) {
+        ctx.noteParameter(block, index, event.value / 127);
+        render();
+      }
     }
     if (event.type === 'expression-volume') {
       paintExpressionFeedback(event.expression, Math.round((event.volume / 100) * 127));
@@ -738,6 +755,11 @@ export const ctx = {
     }
     const mapping = currentAssignments().expressions.find((entry) => entry.id === pedalId);
     if (!mapping) return 0;
+    if (mapping.tempo) {
+      const config = ctx.tempoSyncFor(mapping.target);
+      const index = Math.max(0, SUBDIVISIONS.findIndex((entry) => entry.id === config.subdivision));
+      return Math.round((index / Math.max(1, SUBDIVISIONS.length - 1)) * 127);
+    }
     const value = snapshot?.blocks.find((block) => block.id === mapping.target)?.params[mapping.paramIndex];
     return Number.isFinite(value) ? expressionRawForNormalized(mapping, value) : 0;
   },
@@ -749,6 +771,11 @@ export const ctx = {
     }
     const mapping = currentAssignments().expressions.find((e) => e.id === pedalId);
     if (!mapping) return notify(`${pedalId} has no parameter assigned in this preset`);
+    if (mapping.tempo) {
+      paintExpressionFeedback(pedalId, value);
+      ctx.setTempoSync(mapping.target, { subdivision: SUBDIVISIONS[subdivisionIndexForRaw(value)].id });
+      return;
+    }
     const variant = snapshot?.blocks.find((b) => b.id === mapping.target)?.variant ?? 0;
     const bytes = expressionBytes(mapping, state.globals.midiChannel ?? 1, variant, value);
     send(bytes, `expression:${pedalId}`);

@@ -268,11 +268,13 @@ export function assignmentsFor(state, preset) {
     const [target, index] = key.split(':');
     const pedal = (state.globals.expressionPedals ?? []).find((p) => p.id === mapping?.pedal);
     if (!target || !pedal) return [];
+    const tempo = index === 'tempo' || Boolean(mapping?.tempo);
     return [{
       id: pedal.id,
       trigger: pedal.trigger,
       target,
-      paramIndex: Number(index) || 0,
+      ...(tempo ? { tempo: true } : {}),
+      paramIndex: tempo ? 0 : Number(index) || 0,
       inputMin: mapping.inputMin ?? 0,
       inputMax: mapping.inputMax ?? 127,
       outputMin: mapping.outputMin ?? 0,

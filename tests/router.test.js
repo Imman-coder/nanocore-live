@@ -67,6 +67,24 @@ test('the global volume expression pedal emits volume changes', () => {
   ]);
 });
 
+test('a tempo subdivision expression never writes to the delay parameter', () => {
+  const sent = [];
+  const events = [];
+  const router = createRouter({
+    globals,
+    getActiveRow: () => ({ expressions: [
+      { id: 'E1', trigger: { type: 'cc', channel: 1, number: 7 }, target: 'del', tempo: true, paramIndex: 0 },
+    ] }),
+    send: (bytes) => sent.push(bytes),
+    onEvent: (event) => events.push(event),
+  });
+  router.handleMidi({ port: 'GT-10', bytes: [0xb0, 7, 64] });
+  assert.equal(sent.length, 0);
+  const event = events.find((entry) => entry.type === 'expression');
+  assert.equal(event.tempo, true);
+  assert.equal(event.value, 64);
+});
+
 test('a footswitch value of 0 turns off every block assigned to it', () => {
   const { router, sent } = setup();
   router.handleMidi({ port: 'GT-10', bytes: [0xb0, 6, 0] });

@@ -231,34 +231,34 @@
       on:pointerdown={(event) => onCellPointerDown(event, item)}
     >
       {#if item.kind === 'tap'}
-        <button class="flex h-full min-h-0 w-full flex-col gap-1 rounded-[10px] border border-line bg-panel p-2.5 text-left font-[inherit] text-inherit cursor-pointer hover:border-accent disabled:cursor-not-allowed disabled:opacity-50" on:click={() => ctx.tapTempo()}>
+        <button class="flex h-full min-h-0 w-full flex-col gap-1 rounded-[10px] border border-line bg-panel p-2.5 text-left font-[inherit] text-inherit cursor-pointer hover:border-accent disabled:cursor-not-allowed disabled:opacity-50" disabled={editing} on:click={() => ctx.tapTempo()}>
           <span class="font-bold">Tap tempo</span>
           <span class="overflow-hidden text-ellipsis text-[11px] text-muted">{globals.tempo?.bpm ? `${globals.tempo.bpm} BPM · tap to retap` : 'tap to set BPM'}</span>
         </button>
       {:else if item.kind === 'scene'}
         {@const scene = scenes.find((entry) => entry.key === item.ref)}
         <button class="flex h-full min-h-0 w-full flex-col gap-1 rounded-[10px] border border-line bg-panel p-2.5 text-left font-[inherit] text-inherit cursor-pointer hover:border-accent disabled:cursor-not-allowed disabled:opacity-50 {state.activeScene === item.ref ? '!border-accent-2' : ''}" aria-pressed={state.activeScene === item.ref}
-          disabled={!scene?.stored} on:click={() => ctx.recallScene(item.ref)}>
+          disabled={editing || !scene?.stored} on:click={() => ctx.recallScene(item.ref)}>
           <span class="font-bold">{scene?.name ?? item.ref}</span>
           <span class="overflow-hidden text-ellipsis text-[11px] text-muted">{state.activeScene === item.ref ? 'Active · ' : ''}{!scene?.stored ? 'empty' : item.ref === 'base' ? (ctx.baseOverridden() ? 'saved values' : 'pedal values') : 'stored scene'}</span>
         </button>
       {:else if item.kind === 'stomp'}
         {@const fs = stomps.find((entry) => entry.id === item.ref)}
-        <button class="flex h-full min-h-0 w-full flex-col gap-1 rounded-[10px] border border-line bg-panel p-2.5 text-left font-[inherit] text-inherit cursor-pointer hover:border-accent disabled:cursor-not-allowed disabled:opacity-50 {fs?.active ? '!border-accent-2' : ''}" aria-pressed={Boolean(fs?.active)} on:click={() => ctx.toggleStomp(item.ref)}>
+        <button class="flex h-full min-h-0 w-full flex-col gap-1 rounded-[10px] border border-line bg-panel p-2.5 text-left font-[inherit] text-inherit cursor-pointer hover:border-accent disabled:cursor-not-allowed disabled:opacity-50 {fs?.active ? '!border-accent-2' : ''}" aria-pressed={Boolean(fs?.active)} disabled={editing} on:click={() => ctx.toggleStomp(item.ref)}>
           <span class="font-bold">{fs?.label ?? item.ref}</span>
           <span class="overflow-hidden text-ellipsis text-[11px] text-muted">{fs?.name ?? item.ref} · {fs ? ctx.describeTrigger(fs.trigger) : ''}</span>
         </button>
       {:else if item.kind === 'expression'}
         {@const pedal = pedals.find((entry) => entry.id === item.ref)}
         {#if pedal}
-          <ExpressionFader {pedal} {ctx} />
+          <ExpressionFader {pedal} {ctx} {editing} />
         {:else}
           <div class="flex h-full min-h-0 w-full flex-col gap-1 rounded-[10px] bg-panel p-2.5 text-left text-muted opacity-55"><div class="font-bold">{item.ref}</div><div class="overflow-hidden text-ellipsis text-[11px] text-muted">no such pedal</div></div>
         {/if}
       {:else if item.kind === 'preset' && item.ref === 'dropdown'}
         <div class="flex h-full min-h-0 w-full flex-col gap-1 rounded-[10px] bg-panel p-2.5 text-left">
           <div class="font-bold">Preset</div>
-          <select data-preset-select="1" class="w-full text-base select select-bordered select-sm" aria-label="Select preset" value={state.activePreset}
+          <select data-preset-select="1" class="w-full text-base select select-bordered select-sm" aria-label="Select preset" value={state.activePreset} disabled={editing}
             on:change={(event) => ctx.recallPreset(Number(event.currentTarget.value))}>
             {#each presets as preset (preset.number)}
               <option value={preset.number} selected={preset.number === state.activePreset}>{preset.number} · {preset.label}</option>
@@ -267,7 +267,7 @@
         </div>
       {:else if item.kind === 'preset'}
         {@const preset = presets.find((entry) => entry.number === Number(item.ref))}
-        <button class="flex h-full min-h-0 w-full flex-col gap-1 rounded-[10px] border border-line bg-panel p-2.5 text-left font-[inherit] text-inherit cursor-pointer hover:border-accent disabled:cursor-not-allowed disabled:opacity-50" on:click={() => ctx.recallPreset(Number(item.ref))}>
+        <button class="flex h-full min-h-0 w-full flex-col gap-1 rounded-[10px] border border-line bg-panel p-2.5 text-left font-[inherit] text-inherit cursor-pointer hover:border-accent disabled:cursor-not-allowed disabled:opacity-50" disabled={editing} on:click={() => ctx.recallPreset(Number(item.ref))}>
           <span class="font-bold">{preset?.label ?? `Preset ${item.ref}`}</span>
           <span class="overflow-hidden text-ellipsis text-[11px] text-muted">#{item.ref}</span>
         </button>

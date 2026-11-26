@@ -95,6 +95,10 @@ export function createRouter({ globals, getActiveRow, send, onEvent = () => {}, 
 
     for (const expression of row.expressions ?? []) {
       if (!sameTrigger(expression.trigger, message)) continue;
+      if (expression.tempo) {
+        emit({ type: 'expression', expression: expression.id, target: expression.target, tempo: true, cc: null, value: message.value });
+        continue;
+      }
       const variant = typeof expression.target === 'object' ? (expression.target.variant ?? 0) : getVariant(expression.target);
       const bytes = expressionBytes(expression, globals.midiChannel ?? 1, variant, message.value);
       send(bytes, `expression:${expression.id}`);

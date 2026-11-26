@@ -63,8 +63,12 @@
   $: timeParams = params.some((param) => param.label === 'Time' || param.label === 'Delay');
   $: sync = selected ? ($app.state, ctx.tempoSyncFor(selected)) : { enabled: false, subdivision: '1/8' };
   $: tempoSynced = Boolean(timeParams && sync.enabled);
-  $: visibleParams = params.map((param, index) => ({ param, index }))
-    .filter(({ param }) => !(tempoSynced && (param.label === 'Time' || param.label === 'Delay')));
+  $: subdivisionIndex = Math.max(0, SUBDIVISIONS.findIndex((entry) => entry.id === sync.subdivision));
+  $: visibleParams = params.map((param, index) => ({
+    param,
+    index,
+    synced: tempoSynced && (param.label === 'Time' || param.label === 'Delay'),
+  }));
   $: stompRaw = assignments?.blockStomps?.[selected];
   $: stompId = typeof stompRaw === 'string' ? stompRaw : stompRaw?.fs;
   $: sceneOn = selected ? ($app.state, ctx.sceneBlockEnabled(selected)) : false;
@@ -79,8 +83,10 @@
   $: badges = ($app.state.globals?.expressionPedals ?? []).map((pedal) => {
     const entry = Object.entries(assignments?.paramPedals ?? {}).find(([, mapping]) => mapping?.pedal === pedal.id);
     const globalVolume = globals.volumePedal === pedal.id;
+    const [block, index] = entry ? entry[0].split(':') : [null, null];
+    const detail = index === 'tempo' ? 'tempo division' : `param ${Number(index) + 1}`;
     const target = entry
-      ? `${BLOCK_BY_ID[entry[0].split(':')[0]]?.name ?? entry[0].split(':')[0]} · ${Number(entry[0].split(':')[1]) + 1}`
+      ? `${BLOCK_BY_ID[block]?.name ?? block} · ${detail}`
       : globalVolume ? 'Preset volume · Globals' : 'free';
     return { id: pedal.id, target, assigned: Boolean(entry || globalVolume), globalVolume };
   });
@@ -279,8 +285,13 @@
     ctx.render();
   }
 
-  function openPopup(index, param) {
-    popupTarget = { block: selected, paramIndex: index, label: param.label, cc: param.cc ?? null };
+  function setSubdivision(index) {
+    const option = SUBDIVISIONS[index];
+    if (option) ctx.setTempoSync(selected, { subdivision: option.id });
+  }
+
+  function openPopup(index, param, tempo = false) {
+    popupTarget = { block: selected, paramIndex: index, label: param.label, cc: param.cc ?? null, tempo };
   }
 
   function requestSceneBlock(event) {
@@ -311,10 +322,10 @@
         value={snapshot?.volume ?? 60} aria-label="Preset volume"
         on:change={(event) => ctx.setVolume(Number(event.currentTarget.value))}>
       <div class="text-muted text-xs">{snapshot?.volume ?? '—'} / 100</div>
-      <div class="mb-2.5 flex flex-wrap items-center gap-2">
-        <button class="btn" on:click={() => ctx.recallPreset(Math.max(1, Math.min(64, preset - 1)))} aria-label="Previous preset">◀</button>
-        <button class="btn" on:click={() => ctx.recallPreset(preset)}>Recall preset</button>
-        <button class="btn" on:click={() => ctx.recallPreset(Math.max(1, Math.min(64, preset + 1)))} aria-label="Next preset">▶</button>
+      <div class="mb-2.5 flex items-center gap-2">
+        <button class="btn btn-sm" on:click={() => ctx.recallPreset(Math.max(1, Math.min(64, preset - 1)))} aria-label="Previous preset">◀</button>
+        <button class="btn btn-sm" on:click={() => ctx.recallPreset(preset)}>Recall preset</button>
+        <button class="btn btn-sm" on:click={() => ctx.recallPreset(Math.max(1, Math.min(64, preset + 1)))} aria-label="Next preset">▶</button>
       </div>
       <h3 class="mb-2 mt-3.5 text-xs uppercase tracking-[0.08em] text-muted">Edited presets</h3>
       <div class="flex flex-wrap items-center gap-1">
@@ -448,20 +459,11 @@
             <input type="checkbox" class="checkbox checkbox-sm checkbox-primary" checked={sync.enabled} on:change={(event) => ctx.setTempoSync(selected, { enabled: event.currentTarget.checked })}>
             <span></span> Sync with tempo
           </label>
-          <span class="text-muted text-xs">Replaces the time knob with a note subdivision. {globals.tempo?.bpm ? '' : 'Tap a tempo in the top bar first.'}</span>
+          <span class="text-muted text-xs">Turns the time knob into a subdivision selector. {globals.tempo?.bpm ? '' : 'Tap a tempo in the top bar first.'}</span>
         </div>
       {/if}
       {#if tempoSynced}
-        <div class="mb-2.5 flex flex-wrap items-center gap-2">
-          <label for="tempo-subdivision" class="text-xs text-muted min-w-[90px]">Delay subdivision</label>
-          <select id="tempo-subdivision" class="select select-bordered select-sm" value={sync.subdivision}
-            on:change={(event) => ctx.setTempoSync(selected, { subdivision: event.currentTarget.value })}>
-            {#each SUBDIVISIONS as subdivision (subdivision.id)}
-              <option value={subdivision.id} selected={subdivision.id === sync.subdivision}>{subdivision.label} ({subdivision.id})</option>
-            {/each}
-          </select>
-          <span class="text-muted text-xs">{ctx.tempoSubdivisionMs(selected)} ms · {globals.tempo?.bpm ?? '—'} BPM · {globals.tempo?.signature ?? '4/4'}</span>
-        </div>
+        <p class="mb-2.5 text-xs text-muted">{ctx.tempoSubdivisionMs(selected)} ms · {globals.tempo?.bpm ?? '—'} BPM · {globals.tempo?.signature ?? '4/4'}</p>
       {/if}
 
       {#if sceneOn}
@@ -486,15 +488,13 @@
               on:change={(event) => ctx.renameScene(scene.key, event.currentTarget.value)}>
           {/each}
         </div>
-      {:else}
-        <p class="text-muted text-xs">Scenes are hidden for this block. Switch Scene participation back on to resume — forgotten values are not restored.</p>
       {/if}
 
       <h3 class="mb-2 mt-3.5 text-xs uppercase tracking-[0.08em] text-muted">Parameters <span class="text-muted text-xs">— right-click a parameter to assign an expression pedal</span></h3>
       <div class="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))]  gap-4">
         {#each visibleParams as entry (entry.index)}
           {@const normalized = live.params?.[entry.index] ?? 0}
-          {@const mapping = assignments?.paramPedals?.[`${selected}:${entry.index}`]}
+          {@const mapping = assignments?.paramPedals?.[`${selected}:${entry.synced ? 'tempo' : entry.index}`]}
           {@const options = entry.param.options ?? []}
           {@const enumIndex = ccToEnum(Math.round(normalized * 127), options)}
           {@const actual = (Number(entry.param.min) || 0) + normalized * ((Number(entry.param.max) || 0) - (Number(entry.param.min) || 0))}
@@ -502,13 +502,23 @@
             data-param-cc={entry.param.cc ?? 'null'} data-param-label={entry.param.label}
             role="group" aria-label={`Assign expression pedal to ${entry.param.label}`}
             title="Right-click to assign an expression pedal"
-            on:contextmenu|preventDefault={() => openPopup(entry.index, entry.param)}>
+            on:contextmenu|preventDefault={() => openPopup(entry.index, entry.param, entry.synced)}>
             {#if mapping}
               <div class="mb-1">
                 <span class="rounded-full border border-accent px-2 py-0.5 text-[11px]">{mapping.pedal} · {mapping.inputMin ?? 0}–{mapping.inputMax ?? 127}{mapping.invert ? ' · inv' : ''}</span>
               </div>
             {/if}
-            {#if entry.param.kind === 'enum'}
+            {#if entry.synced}
+              <Knob
+                id={`tempo-${selected}-${entry.index}`}
+                value={subdivisionIndex}
+                max={SUBDIVISIONS.length - 1}
+                label={entry.param.label}
+                stepLabels={SUBDIVISIONS.map((entry) => entry.id)}
+                display={sync.subdivision}
+                on:input={(event) => setSubdivision(event.detail)}
+              />
+            {:else if entry.param.kind === 'enum'}
               <Knob
                 id={`param-${selected}-${entry.index}`}
                 value={enumIndex}

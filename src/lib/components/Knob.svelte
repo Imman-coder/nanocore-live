@@ -22,6 +22,9 @@
     : Array.isArray(labels) ? labels
       : typeof stepLabel === 'string' && stepLabel ? stepLabel.split('|') : null;
   $: angle = -135 + (current / ceiling) * 270;
+  $: ringLength = 2 * Math.PI * 29;
+  $: trackArc = ringLength * 0.75;
+  $: valueArc = trackArc * (current / ceiling);
   $: shown = detents && detents.length
     ? (detents[Math.round(current)] ?? String(Math.round(current)))
     : display;
@@ -65,21 +68,27 @@
 </script>
 
 <div class="relative inline-flex flex-col items-center">
-  <div
-    class="grid h-[54px] w-[54px] cursor-ns-resize touch-none place-items-center rounded-full border-2 border-line bg-[#0f1319]"
-    role="slider"
-    tabindex="0"
-    aria-label={label}
-    aria-valuemin="0"
-    aria-valuemax={ceiling}
-    aria-valuenow={current}
-    on:pointerdown={onPointerDown}
-    on:pointermove={onPointerMove}
-    on:pointerup={onPointerUp}
-    on:pointercancel={onPointerUp}
-    on:keydown={onKeyDown}
-  >
-    <div class="relative h-[38px] w-[38px] rounded-full bg-panel-2 [transform:rotate(var(--angle,0deg))]" style="--angle: {angle}deg"><i class="absolute left-1/2 top-[3px] h-3 w-0.5 -translate-x-1/2 bg-accent"></i></div>
+  <div class="relative inline-flex">
+    <svg class="pointer-events-none absolute -inset-[5px] z-0 h-[64px] w-[64px] -rotate-[225deg]" viewBox="0 0 64 64" aria-hidden="true">
+      <circle cx="32" cy="32" r="29" fill="none" stroke="oklch(var(--b3))" stroke-width="3" stroke-linecap="round" stroke-dasharray="{trackArc} {ringLength}" />
+      <circle cx="32" cy="32" r="29" fill="none" stroke="oklch(var(--p))" stroke-width="3" stroke-linecap="round" stroke-dasharray="{valueArc} {ringLength}" />
+    </svg>
+    <div
+      class="relative z-10 grid h-[54px] w-[54px] cursor-ns-resize touch-none place-items-center rounded-full border-2 border-line bg-[#0f1319]"
+      role="slider"
+      tabindex="0"
+      aria-label={label}
+      aria-valuemin="0"
+      aria-valuemax={ceiling}
+      aria-valuenow={current}
+      on:pointerdown={onPointerDown}
+      on:pointermove={onPointerMove}
+      on:pointerup={onPointerUp}
+      on:pointercancel={onPointerUp}
+      on:keydown={onKeyDown}
+    >
+      <div class="relative h-[38px] w-[38px] rounded-full bg-panel-2 [transform:rotate(var(--angle,0deg))]" style="--angle: {angle}deg"><i class="absolute left-1/2 top-[3px] h-3 w-0.5 -translate-x-1/2 bg-accent"></i></div>
+    </div>
   </div>
   <div class="flex flex-col gap-0.5 text-[11px]"><label class="text-xs text-muted" for={id}>{label}</label><span class="text-center">{shown}</span></div>
   <input
