@@ -34,7 +34,7 @@
     {/if}
     {#if mode !== 'start'}
       <div class="flex items-center gap-1.5">
-        <button class="btn {tempo.bpm ? 'btn-primary' : ''}" on:click={() => ctx.tapTempo()} title="Tap to set BPM">TAP</button>
+        <button class="btn btn-outline {tempo.bpm ? 'btn-primary' : ''}" on:click={() => ctx.tapTempo()} title="Tap to set BPM">TAP</button>
         <span class="min-w-7 text-center font-bold text-accent">{tempo.bpm ?? '—'}</span>
         <select aria-label="Time signature" value={tempo.signature}
           class="w-[68px] select select-bordered select-sm"

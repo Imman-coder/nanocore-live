@@ -31,7 +31,6 @@
   }
 </script>
 
-<p class="text-xs text-muted">Select the NANOCORE ports before connecting — the choice is saved in this browser.</p>
 <button data-devices-scan class="btn" on:click={() => ctx.scanPorts()}>Scan MIDI devices</button>
 
 {#if !(ports.inputs.length || $app.connected)}

@@ -332,30 +332,32 @@
 
   <section class="min-w-0 flex-1">
     <h2 class="m-0 mb-3 text-lg">Editor <span class="text-muted text-xs">— NANOCORE preset {preset}</span></h2>
-    <div class="card mb-3 border border-base-300 bg-base-200 p-3.5 flex flex-wrap items-start justify-between gap-3">
-      <div class="mb-2.5 flex flex-wrap items-center gap-2">
+    <div class="card mb-3 border border-base-300 bg-base-200 p-3.5 flex flex-wrap justify-between gap-3">
+      <div class="flex flex-wrap items-center gap-2">
         <span class="font-semibold">Preset {preset}</span>
         <input data-editor="preset-name" class="input input-bordered input-sm" aria-label="Preset name" placeholder="Preset name (max 8 characters)"
           bind:value={nameDraft} on:change={changeName}>
         <label class="text-xs text-muted" for="editor-preset">NANOCORE preset</label>
-        <select id="editor-preset" class="select select-bordered select-sm flex-1" value={preset} on:change={(event) => ctx.recallPreset(Number(event.currentTarget.value))}>
+        <select id="editor-preset" class="select select-bordered select-sm" value={preset} on:change={(event) => ctx.recallPreset(Number(event.currentTarget.value))}>
           {#each presetNumbers as number (number)}
             <option value={number} selected={number === preset}>{number} · {ctx.presetLabel(number)}</option>
           {/each}
         </select>
-        <button data-action="save-preset-name" class="btn btn-ghost" title="Write this name to the NANOCORE and save the preset"
-          on:click={() => ctx.renamePresetOnDevice(nameDraft)}>Save name to pedal</button>
-        <button id="editor-read" class="btn" on:click={() => ctx.readSnapshot()}>Read snapshot</button>
-        <button id="save-preset" class="btn btn-primary" title="Write live RAM permanently into this NANOCORE preset"
-          on:click={() => ctx.savePreset()}>Save to pedal</button>
+        <div class="ml-auto">
+          <button data-action="save-preset-name" class="btn btn-ghost btn-sm" title="Write this name to the NANOCORE and save the preset"
+            on:click={() => ctx.renamePresetOnDevice(nameDraft)}>Save name to pedal</button>
+          <button id="editor-read" class="btn btn-sm" on:click={() => ctx.readSnapshot()}>Read snapshot</button>
+          <button id="save-preset" class="btn btn-primary btn-sm" title="Write live RAM permanently into this NANOCORE preset"
+            on:click={() => ctx.savePreset()}>Save to pedal</button>
+        </div>
       </div>
-      <div class="text-muted text-xs">
+      <!-- <div class="text-muted text-xs">
         {#if snapshot}
           {$app.demo ? 'Demo snapshot' : 'Loaded from the pedal'}: preset {snapshot.activePreset + 1}, volume {snapshot.volume}
         {:else}
           Connect and read the snapshot to edit the current preset.
         {/if}
-      </div>
+      </div> -->
     </div>
 
 {#if !snapshot}
@@ -378,22 +380,37 @@
         {@const assetName = id === 'amp' ? names.amp?.[slot] : id === 'cab' ? names.ir?.[slot] : null}
         {@const fs = typeof assignments?.blockStomps?.[id] === 'string'
           ? assignments.blockStomps[id] : assignments?.blockStomps?.[id]?.fs}
-        <button class="flex min-w-[128px] touch-pan-y flex-col gap-[3px] rounded-[10px] border border-line bg-panel p-2.5 cursor-pointer font-[inherit] text-inherit text-left hover:border-accent disabled:cursor-not-allowed disabled:opacity-50 {id === selected ? 'border-accent ring-2 ring-accent' : ''} {dragId === id ? 'scale-[0.96] opacity-50' : ''} {dragOver === id ? 'border-accent-2 ring-[3px] ring-[#64d2a433]' : ''}"
-          data-chain-row
-          data-block={id}
-          draggable="true"
-          title="Click to edit · drag to reorder"
-          on:click={() => selectBlock(id)}
-          on:dragstart={(event) => onDragStart(event, id)}
-          on:dragend={() => endChainDrag(false)}
-          on:pointerdown={onRowPointerDown}
-        >
-          <span class="text-[11px] text-muted">{position + 1}</span>
-          <span class="font-extrabold">{definition.name}</span>
-          <span class="text-[11px] text-muted">{assetName || effectType?.name || (id === 'amp' || id === 'cab' ? 'loading…' : '—')}</span>
-          <span class="text-[11px] text-muted">{item.enabled ? 'ON' : 'off'}</span>
-          <span class="badge badge-outline badge-sm">{fs ?? 'no stomp'}</span>
+          <div class="indicator">
+            {#if fs}
+              <span class="indicator-item top-[20%] right-[5%] badge badge-secondary">{fs}</span>
+            {/if}
+            <button class="flex min-w-[128px] touch-pan-y flex-col gap-[3px] rounded-[10px] border border-line bg-panel p-2.5 cursor-pointer font-[inherit] text-inherit text-left hover:border-accent disabled:cursor-not-allowed disabled:opacity-50 {id === selected ? 'border-accent ring-2 ring-accent' : ''} {dragId === id ? 'scale-[0.96] opacity-50' : ''} {dragOver === id ? 'border-accent-2 ring-[3px] ring-[#64d2a433]' : ''}"
+            data-chain-row
+            data-block={id}
+            draggable="true"
+            title="Click to edit · drag to reorder"
+            on:click={() => selectBlock(id)}
+            on:dragstart={(event) => onDragStart(event, id)}
+            on:dragend={() => endChainDrag(false)}
+            on:pointerdown={onRowPointerDown}
+          >
+            <!-- <span class="text-[11px] text-muted">{position + 1}</span> -->
+            <span class="font-extrabold">{definition.name}</span>
+            <span class="text-[11px] text-muted">{assetName || effectType?.shortName || effectType?.name || (id === 'amp' || id === 'cab' ? 'loading…' : '—')}</span>
+            <!-- <span class="text-[11px] text-muted">{item.enabled ? 'ON' : 'off'}</span> -->
+            <div >
+              <input type="checkbox" class="hidden" id="fx-switch" on:change={changeEnabled}>
+              <label for="fx-switch">
+                <div class="btn btn-square btn-sm { item.enabled==true ? 'btn-accent' : '' } ">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M5.636 5.636a9 9 0 1 0 12.728 0M12 3v9" />
+                  </svg>
+                </div>
+              </label>
+            </div>
+            <!-- <span class="badge badge-outline badge-sm">{fs ?? 'no stomp'}</span> -->
         </button>
+      </div>
       {/if}
     {/each}
   </div>
@@ -404,8 +421,8 @@
         <div class="flex items-center">
           <h2 style="margin:0" class="m-0 mb-3 text-lg">{block.name}</h2>
           <label class="label text-sm text-muted flex items-center">
-            <input type="checkbox" class="toggle toggle-sm" checked={Boolean(live.enabled)} on:change={changeEnabled}>
             ON/OFF 
+            <input type="checkbox" class="toggle toggle-sm" checked={Boolean(live.enabled)} on:change={changeEnabled}>
           </label>
         </div>
         <select aria-label={`${block.name} type`} class="select select-bordered select-sm" value={selectedSlot}
@@ -434,10 +451,6 @@
       </div>
       {#if warning}<div class="border-accent text-accent">{warning}</div>{/if}
 
-      <div class="mb-2.5 flex flex-wrap items-center gap-2">
-        <span class="text-muted text-xs">Scene off removes this block from scene saves and recalls and forgets its stored values.</span>
-      </div>
-
       {#if timeParams}
         <div class="mb-2.5 flex flex-wrap items-center gap-2">
           <label class="text-xs text-muted min-w-[90px]">
@@ -459,29 +472,6 @@
           <span class="text-muted text-xs">{ctx.tempoSubdivisionMs(selected)} ms · {globals.tempo?.bpm ?? '—'} BPM · {globals.tempo?.signature ?? '4/4'}</span>
         </div>
       {/if}
-
-      <h3 class="mb-2 mt-3.5 text-xs uppercase tracking-[0.08em] text-muted">Expression mapping <span class="text-muted text-xs">— assign by right-clicking a knob</span></h3>
-      <div class="my-2 flex flex-wrap gap-2">
-        {#each badges as badge (badge.id)}
-          <span class="badge badge-outline badge-sm text-muted {badge.assigned ? 'border-accent text-text' : ''}"
-            title={badge.globalVolume ? 'Assigned to preset volume in Globals — clear it there to free this pedal' : undefined}>
-            <b>{badge.id}</b> {badge.target}
-          </span>
-        {/each}
-      </div>
-
-      <!-- <h3 class="mb-2 mt-3.5 text-xs uppercase tracking-[0.08em] text-muted">Stomp switch <span class="text-muted text-xs">— one footswitch can drive this block</span></h3>
-      <div class="my-2 flex flex-wrap gap-2">
-        {#each globals.footswitches ?? [] as fs (fs.id)}
-          <button class="flex min-w-[120px] flex-col gap-1 rounded-[10px] border border-line bg-panel-2 p-2.5 cursor-pointer font-[inherit] text-inherit text-left hover:border-accent disabled:cursor-not-allowed disabled:opacity-50 {stompId === fs.id ? 'border-accent bg-[#30281b]' : ''}"
-            on:click={() => ctx.setBlockStomp(preset, selected, fs.id)}>
-            <b>{fs.name}</b><span class="text-muted text-xs">{ctx.describeTrigger(fs.trigger)}</span>
-          </button>
-        {/each}
-        <button class="flex min-w-[120px] flex-col gap-1 rounded-[10px] border border-line bg-panel-2 p-2.5 cursor-pointer font-[inherit] text-inherit text-left hover:border-accent disabled:cursor-not-allowed disabled:opacity-50 {!stompId ? 'border-accent bg-[#30281b]' : ''}" on:click={() => ctx.setBlockStomp(preset, selected, null)}>
-          <b>None</b><span class="text-muted text-xs">unassigned</span>
-        </button>
-      </div> -->
 
       {#if sceneOn}
         <h3 class="mb-2 mt-3.5 text-xs uppercase tracking-[0.08em] text-muted">Scenes <span class="text-muted text-xs">— store the current parameter values, recall instantly</span></h3>
@@ -510,14 +500,14 @@
       {/if}
 
       <h3 class="mb-2 mt-3.5 text-xs uppercase tracking-[0.08em] text-muted">Parameters <span class="text-muted text-xs">— right-click a parameter to assign an expression pedal</span></h3>
-      <div class="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-2.5">
+      <div class="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))]  gap-4">
         {#each visibleParams as entry (entry.index)}
           {@const normalized = live.params?.[entry.index] ?? 0}
           {@const mapping = assignments?.paramPedals?.[`${selected}:${entry.index}`]}
           {@const options = entry.param.options ?? []}
           {@const enumIndex = ccToEnum(Math.round(normalized * 127), options)}
           {@const actual = (Number(entry.param.min) || 0) + normalized * ((Number(entry.param.max) || 0) - (Number(entry.param.min) || 0))}
-          <div class="cursor-context-menu rounded-[10px] border border-line bg-panel-2 p-2.5 {mapping ? 'border-accent' : ''}" data-param-block={selected} data-param-index={entry.index}
+          <div class="cursor-context-menu flex justify-center rounded-[10px] p-2.5  {mapping ? 'border-accent' : ''}" data-param-block={selected} data-param-index={entry.index}
             data-param-cc={entry.param.cc ?? 'null'} data-param-label={entry.param.label}
             role="group" aria-label={`Assign expression pedal to ${entry.param.label}`}
             title="Right-click to assign an expression pedal"
@@ -550,6 +540,15 @@
           </div>
         {:else}
           <p class="text-muted text-xs">No MIDI-controllable parameters for this type.</p>
+        {/each}
+      </div>
+      <h3 class="mb-2 mt-3.5 text-xs uppercase tracking-[0.08em] text-muted">Expression mapping <span class="text-muted text-xs">— assign by right-clicking a knob</span></h3>
+      <div class="my-2 flex flex-wrap gap-2">
+        {#each badges as badge (badge.id)}
+          <span class="badge badge-outline badge-sm text-muted {badge.assigned ? 'border-accent text-text' : ''}"
+            title={badge.globalVolume ? 'Assigned to preset volume in Globals — clear it there to free this pedal' : undefined}>
+            <b>{badge.id}</b> {badge.target}
+          </span>
         {/each}
       </div>
       {#if block.note}<p class="text-muted text-xs">{block.note}</p>{/if}

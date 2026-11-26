@@ -31,7 +31,7 @@ export const VERSION = {
         ],
       }),
       T({
-        id: 2, variant: 2, slug: 'gate_compressor', name: 'Gate + Compressor (NC-Com)',
+        id: 2, variant: 2, slug: 'gate_compressor', name: 'Gate + Compressor (NG-Com)', shortName: "NG+Comp",
         description: 'Noise Gate + Compressor combo; simultaneously optimizes noise floor and dynamic range.',
         params: [
           P({ kind: 'range', id: 'gate_threshold', label: 'Gate Threshold', cc: 50, min: -100, max: 0, unit: 'dB', default: -80 }),
