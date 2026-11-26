@@ -171,18 +171,12 @@ export function renderLive(ctx) {
     const interactive = true;
     const initialRaw = ctx.expressionInitialValue(pedal.id);
     const initialPercent = expressionRawToPercent(initialRaw);
-    const control = pedal.fullTouch
-      ? `<div class="expression-touch interactive" data-expression-meter="${pedal.id}" role="slider" tabindex="0"
-          aria-label="${escapeHtml(pedal.name)} full touch control" aria-valuemin="0" aria-valuemax="127" aria-valuenow="${initialRaw}">
-          <i id="expr-meter-${pedal.id}" style="width:${initialPercent}%"></i>
-          <span id="expr-value-${pedal.id}">${initialPercent}%</span>
-        </div>`
-      : `<div class="meter expression-meter interactive"
-          data-expression-meter="${pedal.id}" role="slider" tabindex="0" aria-label="${escapeHtml(pedal.name)} level"
-          aria-valuemin="0" aria-valuemax="127" aria-valuenow="${initialRaw}">
-          <i id="expr-meter-${pedal.id}" style="width:${initialPercent}%"></i>
-        </div>
-        <div class="stomp-cc" id="expr-value-${pedal.id}">${initialPercent}%</div>`;
+    const control = `<div class="meter expression-meter interactive"
+        data-expression-meter="${pedal.id}" role="slider" tabindex="0" aria-label="${escapeHtml(pedal.name)} level"
+        aria-valuemin="0" aria-valuemax="127" aria-valuenow="${initialRaw}">
+        <i id="expr-meter-${pedal.id}" style="width:${initialPercent}%"></i>
+      </div>
+      <div class="stomp-cc" id="expr-value-${pedal.id}">${initialPercent}%</div>`;
     const html = `<div class="stomp expression-stomp ${expr || ctx.state.globals.volumePedal === pedal.id ? '' : 'muted'}">
       <div class="stomp-label">${escapeHtml(pedal.name)}</div>
       <div class="stomp-cc">${ctx.describeTrigger(pedal.trigger)} → ${escapeHtml(target)}</div>

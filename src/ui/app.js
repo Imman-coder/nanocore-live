@@ -1117,7 +1117,6 @@ function render() {
   document.body.classList.toggle('demo-mode', isDemo());
   document.body.classList.toggle('start-mode', state.mode === 'start');
   document.body.classList.toggle('hide-logbar', state.globals.showLogBar === false);
-  document.body.classList.toggle('live-hide-sidebar', state.mode === 'live' && Boolean(state.globals.liveLayout?.hideSidebar));
   document.body.classList.toggle('live-fit-screen', state.mode === 'live' && Boolean(state.globals.liveLayout?.fitScreen));
   const panelToggle = $('#panel-toggle');
   if (panelToggle) panelToggle.textContent = state.mode === 'live' ? 'Editor' : 'Live';

@@ -207,13 +207,15 @@ test('the bottom MIDI message bar can be hidden', () => {
   assert.equal(createDefaultState().globals.showLogBar, true);
   assert.equal(normalizeState({ globals: { showLogBar: false } }).globals.showLogBar, false);
   assert.equal(createDefaultState().globals.hideLivePresetLabel, false);
+  assert.equal(createDefaultState().globals.hideLivePresetSelector, false);
+  assert.equal(normalizeState({ globals: { hideLivePresetSelector: true } }).globals.hideLivePresetSelector, true);
   assert.equal(createDefaultState().globals.hideAssignmentsButton, false);
 });
 
-test('expression pedals can opt into a full touch control', () => {
+test('expression pedals no longer carry a fullTouch option', () => {
   const g = createDefaultState().globals;
-  assert.equal(g.expressionPedals[0].fullTouch, false);
-  assert.equal(normalizeState({ globals: { expressionPedals: [{ id: 'E1', name: 'E1', trigger: { type: 'cc', channel: 1, number: 7 } }] } }).globals.expressionPedals[0].fullTouch, false);
+  assert.equal('fullTouch' in g.expressionPedals[0], false);
+  assert.equal('fullTouch' in normalizeState({ globals: { expressionPedals: [{ id: 'E1', name: 'E1', trigger: { type: 'cc', channel: 1, number: 7 } }] } }).globals.expressionPedals[0], false);
 });
 
 test('live layout is a grid with span-aware items', () => {

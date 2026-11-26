@@ -21,5 +21,9 @@
   },
   "allowScripts": {
     "esbuild@0.21.5": true
+  },
+  "dependencies": {
+    "daisy-dual-range": "^0.1.0",
+    "nouislider": "^15.8.1"
   }
 }

@@ -99,7 +99,6 @@ function render() {
   modal.innerHTML = `<div class="modal-box layout-modal-box">
     <div class="modal-head"><h2>Arrange live board</h2><button class="small" data-layout-action="close">Close</button></div>
     <p class="muted small">Rows split sideways, columns stack vertically. Every slot keeps its share of space even when empty.</p>
-    <label class="field"><input type="checkbox" data-layout-sidebar ${draft.hideSidebar ? 'checked' : ''}> Hide left sidebar in Live</label>
     <label class="field"><input type="checkbox" data-layout-fit ${draft.fitScreen ? 'checked' : ''}> Fit everything to the screen — no scrolling</label>
     <div class="layout-tree">${renderNode(draft.root, [])}</div>
     <div class="row-actions" style="margin-top:14px">
@@ -130,7 +129,6 @@ document.addEventListener('click', (event) => {
 document.addEventListener('change', (event) => {
   if (!draft) return;
   const el = event.target;
-  if (el.dataset.layoutSidebar !== undefined) { draft.hideSidebar = el.checked; return; }
   if (el.dataset.layoutFit !== undefined) { draft.fitScreen = el.checked; return; }
   const growAttr = el.dataset.layoutGrow;
   if (growAttr !== undefined) {

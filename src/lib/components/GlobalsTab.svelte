@@ -119,7 +119,6 @@
       <label class="text-xs text-muted min-w-[90px]">Channel <input data-global="fs-channel" data-fs={pedal.id} type="number" min="1" max="16" bind:value={pedal.trigger.channel} class="input input-bordered input-sm" /></label>
       <label class="text-xs text-muted min-w-[90px]">Number <input data-global="fs-number" data-fs={pedal.id} type="number" min="0" max="127" bind:value={pedal.trigger.number} class="input input-bordered input-sm" /></label>
       <button class="btn btn-sm" data-global="learn" data-fs={pedal.id} on:click={(event) => learn(pedal.id, event.currentTarget)}>Learn</button>
-      <label class="text-xs text-muted min-w-[90px]"><input type="checkbox" data-global="fs-full-touch" data-fs={pedal.id} bind:checked={pedal.fullTouch} class="checkbox checkbox-sm checkbox-primary" /> Full touch control in Live</label>
     </div>
   </div>
 {/each}

@@ -61,7 +61,6 @@ function body(ctx) {
           <label>Channel</label><input data-global="fs-channel" data-fs="${pedal.id}" type="number" min="1" max="16" value="${pedal.trigger?.channel ?? 1}">
           <label>Number</label><input data-global="fs-number" data-fs="${pedal.id}" type="number" min="0" max="127" value="${pedal.trigger?.number ?? 0}">
           <button class="small" data-global="learn" data-fs="${pedal.id}">Learn</button>
-          <label><input type="checkbox" data-global="fs-full-touch" data-fs="${pedal.id}" ${pedal.fullTouch ? 'checked' : ''}> Full touch control in Live</label>
         </div>
       </div>`).join('')}
     <div class="field">
@@ -153,7 +152,6 @@ function collect() {
     if (input.dataset.global === 'fs-type') target.trigger = { ...target.trigger, type: input.value };
     if (input.dataset.global === 'fs-channel') target.trigger = { ...target.trigger, channel: Number(input.value) };
     if (input.dataset.global === 'fs-number') target.trigger = { ...target.trigger, number: Number(input.value) };
-    if (input.dataset.global === 'fs-full-touch') target.fullTouch = input.checked;
   }
   for (const input of root.querySelectorAll('[data-scene-id]')) {
     const sw = globals.sceneSwitches?.find((s) => s.id === input.dataset.sceneId);

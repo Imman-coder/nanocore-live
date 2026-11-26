@@ -140,7 +140,7 @@
       {/each}
     </div>
 
-    <h3 class="mb-2 mt-3.5 text-xs uppercase tracking-[0.08em] text-muted">Incoming MIDI message</h3>
+    <!-- <h3 class="mb-2 mt-3.5 text-xs uppercase tracking-[0.08em] text-muted">Incoming MIDI message</h3>
     <div class="mb-2.5 flex flex-wrap items-center gap-2">
       <label for="popup-type" class="text-xs text-muted min-w-[90px]">Type</label>
       <select id="popup-type" class="select select-bordered select-sm" value={message.type} on:change={(event) => setMessage('type', event.currentTarget.value)}>
@@ -155,7 +155,7 @@
       <input id="popup-number" class="input input-bordered input-sm" type="number" min="0" max="127" value={message.number ?? 0}
         on:input={(event) => setMessage('number', Number(event.currentTarget.value))}>
       <button class="btn btn-sm" on:click={learn}>Learn from pedal</button>
-    </div>
+    </div> -->
 
     <h3 class="mb-2 mt-3.5 text-xs uppercase tracking-[0.08em] text-muted">Value range mapping</h3>
     <div class="mb-2.5 flex flex-wrap items-center gap-2">

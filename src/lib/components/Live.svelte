@@ -73,26 +73,28 @@
   </div>
 {/if}
 
+{#if !globals.hideLivePresetSelector}
 <div class="mb-3 flex flex-wrap items-center gap-2 card border border-base-300 bg-base-200 p-3.5">
-  <label class="text-xs text-muted" for="live-preset-select">Current NANOCORE preset</label>
-  <select id="live-preset-select" class="select select-bordered select-sm" value={preset} on:change={(event) => ctx.recallPreset(Number(event.currentTarget.value))}>
-    {#each presets as entry (entry.number)}
-      <option value={entry.number} selected={entry.number === preset}>{entry.number} · {entry.label}</option>
-    {/each}
-  </select>
-  <div class="mb-2.5 flex flex-wrap items-center gap-2">
-    <button class="btn" on:click={() => step(-1)} aria-label="Previous preset">◀</button>
-    <button class="btn" on:click={() => ctx.recallPreset(preset)}>Recall</button>
-    <button class="btn" on:click={() => step(1)} aria-label="Next preset">▶</button>
-  </div>
-  {#if edited.length}
+    <label class="text-xs text-muted" for="live-preset-select">Current NANOCORE preset</label>
+    <select id="live-preset-select" class="select select-bordered select-sm" value={preset} on:change={(event) => ctx.recallPreset(Number(event.currentTarget.value))}>
+      {#each presets as entry (entry.number)}
+        <option value={entry.number} selected={entry.number === preset}>{entry.number} · {entry.label}</option>
+      {/each}
+    </select>
+    <div class="mb-2.5 flex flex-wrap items-center gap-2">
+      <button class="btn" on:click={() => step(-1)} aria-label="Previous preset">◀</button>
+      <button class="btn" on:click={() => ctx.recallPreset(preset)}>Recall</button>
+      <button class="btn" on:click={() => step(1)} aria-label="Next preset">▶</button>
+    </div>
+    {#if edited.length}
     <div class="flex flex-wrap gap-1">
       {#each edited as number (number)}
-        <button class="btn btn-sm rounded-full" on:click={() => ctx.recallPreset(number)}>{ctx.presetLabel(number)} · {number}</button>
+      <button class="btn btn-sm rounded-full" on:click={() => ctx.recallPreset(number)}>{ctx.presetLabel(number)} · {number}</button>
       {/each}
     </div>
-  {/if}
-</div>
+    {/if}
+  </div>
+{/if}
 
 <div
   class="flex justify-center {layout.fitScreen ? 'h-full w-full min-h-0 flex-1 items-center overflow-hidden' : 'flex-none items-start'}"

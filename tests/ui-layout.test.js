@@ -44,16 +44,35 @@ test('Settings tab includes the demo-only real-data opt-in', () => {
   assert.match(settings, /Escape/);
   assert.match(settings, /overflow-y-auto/);
   assert.match(settings, /flex-none/);
+  assert.match(settings, /hideLivePresetSelector/);
+  assert.doesNotMatch(settings, /hideSidebar/);
 });
 
 test('Globals carries every global switch including absolute faders', () => {
   assert.match(globals, /data-global="absolute-expression"/);
+  assert.doesNotMatch(globals, /fullTouch|fs-full-touch/);
   assert.match(globals, /data-global="volume-pedal"/);
   assert.match(globals, /data-global="interactive-live"/);
   assert.match(globals, /data-global="firmware"/);
   assert.match(globals, /data-global="midi-channel"/);
   assert.match(globals, /data-global="recall-method"/);
   assert.match(globals, /data-global="tempo-sync"/);
+});
+
+test('MIDI devices keep the chosen reply port and use radio controls', () => {
+  const devices = read('DevicesTab');
+  assert.match(devices, /radio radio-sm radio-primary/);
+  assert.doesNotMatch(devices, /input input-bordered input-sm" type="radio"/);
+  assert.match(devices, /lastPortSignature/);
+  assert.match(devices, /shortPortName/);
+  assert.match(devices, /title=\{row\.input\?\.name \?\? row\.output\?\.name\}/);
+  assert.match(devices, /data-devices-scan/);
+  assert.match(devices, /data-dev="save"/);
+  assert.match(devices, /NANOCORE receive/);
+  assert.match(devices, /NANOCORE send/);
+  assert.match(devices, /Controller receive/);
+  assert.match(devices, /<table/);
+  assert.doesNotMatch(devices, /title=\{port\.id\}/);
 });
 
 test('Editor renders a reorderable chain for mouse, touch and pen', () => {
@@ -81,6 +100,7 @@ test('Editor keeps scenes, stomps, knobs and preset actions', () => {
 
 test('Live keeps the editable grid and all display item kinds', () => {
   assert.match(live, /toggleLiveEdit/);
+  assert.match(live, /hideLivePresetSelector/);
   assert.match(grid, /expression/);
   assert.match(grid, /scene/);
   assert.match(grid, /stomp/);
@@ -97,7 +117,11 @@ test('expression faders recall values and slide relatively by default', () => {
   assert.match(fader, /aria-valuenow/);
   assert.match(fader, /ArrowRight|ArrowLeft/);
   assert.match(fader, /pointercancel/);
+  assert.doesNotMatch(fader, /fullTouch/);
   assert.doesNotMatch(fader, /lostpointercapture/);
+  assert.doesNotMatch(fader, /bg-\[#0f1319\] bg-gradient-to-r/);
+  assert.match(fader, /h-full bg-gradient-to-r from-accent-2 to-accent/);
+  assert.match(fader, /w-full bg-gradient-to-t from-accent-2 to-accent/);
   const popup = read('PedalPopup');
   assert.match(popup, /z-0/);
   assert.match(popup, /z-10/);

@@ -15,7 +15,7 @@ const defaultSceneSwitches = (count) => Array.from({ length: count }, (_, i) => 
 }));
 
 const defaultPedals = () => [7, 11, 1, 4].map((number, i) => ({
-  id: `E${i + 1}`, name: `Expression ${i + 1}`, trigger: { type: 'cc', channel: 1, number }, fullTouch: false,
+  id: `E${i + 1}`, name: `Expression ${i + 1}`, trigger: { type: 'cc', channel: 1, number },
 }));
 
 function flattenLiveLayout(node, out, globals) {
@@ -134,6 +134,7 @@ export function createDefaultState() {
       transportKind: 'webmidi',
       showLogBar: true,
       hideLivePresetLabel: false,
+      hideLivePresetSelector: false,
       hideAssignmentsButton: false,
       interactiveLive: false,
       absoluteExpression: false,
@@ -187,13 +188,18 @@ export function normalizeState(state) {
   const globals = { ...base.globals, ...(state?.globals ?? {}) };
   if (!Array.isArray(globals.footswitches) || !globals.footswitches.length) globals.footswitches = base.globals.footswitches;
   if (!Array.isArray(globals.expressionPedals) || !globals.expressionPedals.length) globals.expressionPedals = base.globals.expressionPedals;
-  globals.expressionPedals = globals.expressionPedals.map((p) => ({ fullTouch: false, ...p }));
+  globals.expressionPedals = globals.expressionPedals.map((pedal) => {
+    const copy = { ...pedal };
+    delete copy.fullTouch;
+    return copy;
+  });
   const sceneCount = Math.max(3, Math.min(6, Number(globals.sceneCount) || 3));
   globals.tapTempoSwitch = globals.tapTempoSwitch ?? base.globals.tapTempoSwitch;
   globals.showLogBar = typeof globals.showLogBar === 'boolean' ? globals.showLogBar : true;
   globals.absoluteExpression = typeof globals.absoluteExpression === 'boolean' ? globals.absoluteExpression : false;
   globals.volumePedal = globals.volumePedal ?? null;
   globals.hideLivePresetLabel = typeof globals.hideLivePresetLabel === 'boolean' ? globals.hideLivePresetLabel : false;
+  globals.hideLivePresetSelector = typeof globals.hideLivePresetSelector === 'boolean' ? globals.hideLivePresetSelector : false;
   globals.hideAssignmentsButton = typeof globals.hideAssignmentsButton === 'boolean' ? globals.hideAssignmentsButton : false;
   if (!isObject(globals.liveLayout?.grid) && !isObject(globals.liveLayout?.root)) globals.liveLayout = base.globals.liveLayout;
   globals.liveLayout = liveGridLayout(globals.liveLayout, globals);

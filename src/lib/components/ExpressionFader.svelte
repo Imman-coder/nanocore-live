@@ -135,7 +135,7 @@
   <div class="font-bold">{pedal?.name ?? pedal?.id}</div>
   <div class="overflow-hidden text-ellipsis text-[11px] text-muted">{ctx.describeTrigger(pedal?.trigger)} → {targetLabel}</div>
   <div
-    class="relative block min-h-6 flex-1 cursor-ew-resize touch-none overflow-hidden rounded-md bg-[#0f1319] bg-gradient-to-r from-accent-2 to-accent {vertical ? '!mx-auto !my-0.5 !h-auto !w-6' : 'h-full w-full'} {pedal?.fullTouch ? '!min-h-11' : ''}"
+    class="relative block min-h-6 flex-1 cursor-ew-resize touch-none overflow-hidden rounded-md bg-[#0f1319] {vertical ? '!mx-auto !my-0.5 !h-auto !w-6' : 'h-full w-full'}"
     bind:this={meterEl}
     id={`expr-meter-${pedal?.id}`}
     data-expression-meter={pedal?.id}
@@ -150,8 +150,8 @@
     on:keydown={onKey}
   >
     <i id={`expr-meter-fill-${pedal?.id}`}
-      class="absolute bottom-0 left-0 bg-current opacity-60 {vertical ? 'w-full' : ''}"
-      style={vertical ? `height: ${percent}%; width: 100%` : `width: ${percent}%`}></i>
+      class="absolute bottom-0 left-0 {vertical ? 'w-full bg-gradient-to-t from-accent-2 to-accent' : 'h-full bg-gradient-to-r from-accent-2 to-accent'}"
+      style={vertical ? `height: ${percent}%` : `width: ${percent}%`}></i>
   </div>
   <div class="overflow-hidden text-ellipsis text-[11px] text-muted" id={`expr-value-${pedal?.id}`}>{percent}%</div>
 </div>
