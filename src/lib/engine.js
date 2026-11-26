@@ -11,10 +11,11 @@ import { buildCc, buildRequestSysEx, parseSysEx, ResponseAssembler, COMMAND, FIE
 import { parseSnapshot } from '../core/snapshot.js';
 import { COMMAND as CAT, parsePresetCatalog, parseStorageInfo, parseSlotInfo, parseGlobalSettings, activeSlotFor } from '../core/catalog.js';
 import { resolveFirmware, typesFor } from '../core/versions.js';
-import { stompActive, toggleCc, sceneStored, sceneBlockParticipates, expressionBytes, expressionRawForNormalized } from '../core/live.js';
+import { stompActive, toggleCc, sceneStored, sceneBlockParticipates } from '../core/live.js';
 import { captureBase } from '../core/base.js';
 import { connectionHint } from '../core/capabilities.js';
-import { tapBpm, delayMs, normalizedForMs, SUBDIVISIONS } from '../core/tempo.js';
+import { tapBpm, delayMs, normalizedForMs } from '../core/tempo.js';
+import { createDispatcher, selectExpressionValue, selectTempoSync } from '../engine/index.js';
 import { buildParameterWrite } from '../core/parameterWrite.js';
 import { writable } from 'svelte/store';
 import { sandboxState, uiStateOf, withUiState, createMemoryStorage } from '../core/demoData.js';
@@ -55,6 +56,7 @@ const logLines = [];
 const catalogState = { busy: false, message: '', presets: 0, amp: 0, ir: 0 };
 let transportBeforeDemo = null;
 let tempoTaps = [];
+let dispatcher = null;
 
 const currentAssignments = () => assignmentsFor(state, state.activePreset);
 
@@ -316,9 +318,14 @@ function paintExpressionFeedback(pedalId, value) {
   emit();
 }
 
-function subdivisionIndexForRaw(value) {
-  return Math.max(0, Math.min(SUBDIVISIONS.length - 1,
-    Math.floor((Number(value) / 127) * SUBDIVISIONS.length)));
+function dispatch(command) {
+  if (!dispatcher) return;
+  if (command?.type === 'expression') {
+    paintExpressionFeedback(command.binding?.id ?? command.expression, Number(command.raw ?? command.value ?? 0) || 0);
+  }
+  dispatcher.dispatch(command);
+  persist();
+  render();
 }
 
 function applyVolumeFromExpression(raw) {
@@ -339,22 +346,15 @@ const router = createRouter({
   onEvent: (event) => {
     log(`${event.type}: ${JSON.stringify(event).slice(0, 140)}`);
     if (event.type === 'expression') {
-      paintExpressionFeedback(event.expression, event.value);
-      if (event.tempo) {
-        ctx.setTempoSync(event.target, { subdivision: SUBDIVISIONS[subdivisionIndexForRaw(event.value)].id });
-        return;
+      log(`expression: ${JSON.stringify({ id: event.expression, raw: event.raw, tempo: Boolean(event.tempo) })}`);
+      if (event.binding) {
+        dispatch({
+          type: 'expression',
+          binding: event.binding,
+          raw: Number(event.raw ?? event.value ?? 0) || 0,
+          variant: event.variant ?? 0,
+        });
       }
-      const mapping = currentAssignments().expressions.find((entry) => entry.id === event.expression);
-      const block = typeof mapping?.target === 'object' ? mapping.target.block : mapping?.target;
-      const index = Number(mapping?.paramIndex ?? 0);
-      if (block && Number.isInteger(index)) {
-        ctx.noteParameter(block, index, event.value / 127);
-        render();
-      }
-    }
-    if (event.type === 'expression-volume') {
-      paintExpressionFeedback(event.expression, Math.round((event.volume / 100) * 127));
-      applyVolumeFromExpression(event.volume);
     }
     if (event.type === 'stomp') {
       ctx.noteEnabled(event.block, event.value === 127);
@@ -714,9 +714,7 @@ export const ctx = {
   disconnect,
   refreshCatalog,
   setGlobalSetting(key, value) {
-    const numeric = ['midiChannel'];
-    update({ globals: { ...state.globals, [key]: numeric.includes(key) ? Number(value) : value } });
-    notify(`${key} updated`);
+    dispatch({ type: 'setGlobalSetting', key, value });
   },
   stompActive(fsId) {
     const key = `${state.activePreset}:${fsId}`;
@@ -746,40 +744,22 @@ export const ctx = {
     syncDelays();
   },
   syncDelays,
-  // Live faders open at the current device value of whatever they control.
-  // The inverse of normalizedExpression keeps custom pedal/parameter windows
-  // and inversion consistent with the MIDI that movement actually sends.
+  // One resolver supplies every fader's starting position from its assigned
+  // target: parameter value, tempo subdivision or global preset volume.
   expressionInitialValue(pedalId) {
     if (state.globals.volumePedal === pedalId) {
-      return Math.round(Math.max(0, Math.min(100, snapshot?.volume ?? 0)) / 100 * 127);
+      return selectExpressionValue({ volume: true }, state, snapshot);
     }
-    const mapping = currentAssignments().expressions.find((entry) => entry.id === pedalId);
-    if (!mapping) return 0;
-    if (mapping.tempo) {
-      const config = ctx.tempoSyncFor(mapping.target);
-      const index = Math.max(0, SUBDIVISIONS.findIndex((entry) => entry.id === config.subdivision));
-      return Math.round((index / Math.max(1, SUBDIVISIONS.length - 1)) * 127);
-    }
-    const value = snapshot?.blocks.find((block) => block.id === mapping.target)?.params[mapping.paramIndex];
-    return Number.isFinite(value) ? expressionRawForNormalized(mapping, value) : 0;
+    const binding = currentAssignments().expressions.find((entry) => entry.id === pedalId);
+    return selectExpressionValue(binding, state, snapshot);
   },
   sendExpression(pedalId, value) {
-    if (state.globals.volumePedal === pedalId) {
-      paintExpressionFeedback(pedalId, value);
-      applyVolumeFromExpression(Math.round((value / 127) * 100));
-      return;
-    }
-    const mapping = currentAssignments().expressions.find((e) => e.id === pedalId);
-    if (!mapping) return notify(`${pedalId} has no parameter assigned in this preset`);
-    if (mapping.tempo) {
-      paintExpressionFeedback(pedalId, value);
-      ctx.setTempoSync(mapping.target, { subdivision: SUBDIVISIONS[subdivisionIndexForRaw(value)].id });
-      return;
-    }
-    const variant = snapshot?.blocks.find((b) => b.id === mapping.target)?.variant ?? 0;
-    const bytes = expressionBytes(mapping, state.globals.midiChannel ?? 1, variant, value);
-    send(bytes, `expression:${pedalId}`);
-    paintExpressionFeedback(pedalId, value);
+    const binding = state.globals.volumePedal === pedalId
+      ? { id: pedalId, volume: true }
+      : currentAssignments().expressions.find((e) => e.id === pedalId);
+    if (!binding) return notify(`${pedalId} has no parameter assigned in this preset`);
+    const variant = snapshot?.blocks.find((b) => b.id === binding.target)?.variant ?? 0;
+    dispatch({ type: 'expression', binding, raw: value, variant });
   },
   toggleStomp(fsId) {
     if (!snapshot) return notify('Connect and read the preset first');
@@ -815,17 +795,15 @@ export const ctx = {
       enabled[block.id] = Boolean(block.enabled);
     }
     if (name === 'base') {
-      update({ ...markPresetEdited(setBase(state, state.activePreset, values, enabled), state.activePreset), activeScene: 'base' });
+      dispatch({ type: 'storeScene', base: true, values, enabled });
       return notify(`Base stored in this browser · ${Object.keys(enabled).length} fx states`);
     }
-    let next = markPresetEdited(setScene(state, state.activePreset, name, values), state.activePreset);
-    next = setSceneEnabled(next, state.activePreset, name, enabled);
-    update(next);
+    dispatch({ type: 'storeScene', name, values, enabled });
     notify(`${name === 'base' ? 'Base' : `Scene ${name.slice(-1)}`} stored · ${Object.keys(enabled).length} fx states${skipped ? ` · ${skipped} block(s) skipped` : ''}`);
   },
   selectScene(name) {
     if (!sceneStored(currentAssignments(), name)) {
-      update({ activeScene: name });
+      dispatch({ type: 'selectScene', name });
       notify(`${ctx.sceneName(name)} is empty — press Store to save it here`);
       return;
     }
@@ -836,7 +814,10 @@ export const ctx = {
       notify(`${ctx.sceneName(name)} is empty — store something there first`);
       return;
     }
-    update({ activeScene: name });
+    dispatch({ type: 'recallScene', name });
+  },
+  applySceneRecall(name) {
+    dispatch({ type: 'selectScene', name });
     const assignments = currentAssignments();
     const base = assignments.base ?? { values: {}, enabled: {} };
     const values = name === 'base' ? base.values : assignments.scenes?.[name];
@@ -864,7 +845,7 @@ export const ctx = {
   },
   sceneBlockEnabled(blockId) { return sceneBlockParticipates(currentAssignments(), blockId); },
   tempoSyncFor(blockId) {
-    return currentAssignments().tempoSync?.[blockId] ?? { enabled: false, subdivision: '1/8' };
+    return selectTempoSync(state, blockId);
   },
   tempoSubdivisionMs(blockId) {
     const config = ctx.tempoSyncFor(blockId);
@@ -872,8 +853,7 @@ export const ctx = {
     return delayMs(tempo.bpm ?? 120, tempo.signature ?? '4/4', config.subdivision ?? '1/8');
   },
   setTempoSync(blockId, patch) {
-    update(markPresetEdited(setTempoSync(state, state.activePreset, blockId, patch), state.activePreset));
-    syncDelays();
+    dispatch({ type: 'setTempoSync', block: blockId, patch });
   },
   setLiveLayout(layout) { update(setLiveLayout(state, layout)); },
   setLiveLayoutOption(key, value) {
@@ -951,12 +931,7 @@ export const ctx = {
   startLiveEdit() { update({ mode: 'live', liveEditing: true }); },
   openLiveLayout() { ctx.startLiveEdit(); },
   setSceneBlock(blockId, participates, options = {}) {
-    update(markPresetEdited(setSceneBlock(state, state.activePreset, blockId, participates, options), state.activePreset));
-    notify(participates
-      ? `${BLOCK_BY_ID[blockId]?.name ?? blockId} now participates in scenes`
-      : options.forgetValues
-        ? `${BLOCK_BY_ID[blockId]?.name ?? blockId} excluded — saved values forgotten`
-        : `${BLOCK_BY_ID[blockId]?.name ?? blockId} excluded — saved values kept`);
+    dispatch({ type: 'setSceneBlock', block: blockId, participates, options });
   },
   setVolume(value) {
     if (!snapshot) return;
@@ -998,17 +973,20 @@ export const ctx = {
     );
     const ccBytes = sharedCcConflict ? null
       : buildParameterWrite({ param, normalized: value, channel: Number(state.globals.midiChannel) || 1 });
-    if (ccBytes) {
-      send(ccBytes);
-    } else {
+    let bytes = ccBytes;
+    if (!bytes) {
       const view = new DataView(new ArrayBuffer(4));
       view.setFloat32(0, value, true);
-      send(buildRequestSysEx(COMMAND.SET_FIELD,
-        [FIELD.PARAMETER, effectIndex, paramIndex, ...new Uint8Array(view.buffer)]),
-      `sysex-param:${blockId}:${paramIndex}`);
+      bytes = buildRequestSysEx(COMMAND.SET_FIELD,
+        [FIELD.PARAMETER, effectIndex, paramIndex, ...new Uint8Array(view.buffer)]);
     }
-    ctx.noteParameter(blockId, paramIndex, value);
-    markEditedNoRender(state.activePreset);
+    dispatch({
+      type: 'writeParameter',
+      target: { kind: 'param', block: blockId, index: paramIndex },
+      normalized: value,
+      bytes,
+      source: 'editor',
+    });
   },
   setAssetName(kind, slot, name) {
     if (Array.isArray(names[kind]) && names[kind][slot] !== undefined) {
@@ -1042,7 +1020,7 @@ export const ctx = {
   setExpressions(preset, expressions) { update(markPresetEdited(updatePreset(state, preset, { expressions }), preset)); },
   selectBlock(blockId) { update({ selectedBlock: blockId }); },
   setBlockStomp(preset, block, fsId) { update(markPresetEdited(setBlockStomp(state, preset, block, fsId), preset)); },
-  setParamPedal(preset, block, paramIndex, config) { update(markPresetEdited(setParamPedal(state, preset, block, paramIndex, config), preset)); },
+  setParamPedal(preset, block, paramIndex, config) { dispatch({ type: 'setParamPedal', preset, block, paramIndex, config }); },
   pedalOwner(preset, pedalId) { return pedalOwner(state, preset, pedalId); },
   setExpressionTrigger(pedalId, trigger) { update(setExpressionTrigger(state, pedalId, trigger)); },
   toggleBlock(blockId) {
@@ -1093,6 +1071,22 @@ export const ctx = {
     } catch (error) { notify(error.message); }
   },
 };
+
+dispatcher = createDispatcher({
+  getState: () => state,
+  setState: (next) => { state = next; },
+  effects: {
+    writeParameter: ({ target, normalized, bytes, pedalId }) => {
+      ctx.noteParameter(target.block, target.index, normalized);
+      send(bytes, pedalId ? `expression:${pedalId}` : `parameter:${target.block}:${target.index}`);
+      markEditedNoRender(state.activePreset);
+    },
+    syncDelays: () => syncDelays(),
+    setVolume: ({ value }) => applyVolumeFromExpression(value),
+    recallScene: ({ name }) => ctx.applySceneRecall(name),
+    notify: ({ message }) => notify(message),
+  },
+});
 
 window.__nanocoreCtx = ctx;
 window.__nanocoreConnect = connect;

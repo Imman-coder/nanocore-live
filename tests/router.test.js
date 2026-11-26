@@ -62,9 +62,10 @@ test('the global volume expression pedal emits volume changes', () => {
     onEvent: (event) => events.push(event),
   });
   router.handleMidi({ port: 'GT-10', bytes: [0xb0, 11, 63] });
-  assert.deepEqual(events.filter((event) => event.type === 'expression-volume'), [
-    { at: events.at(-1).at, type: 'expression-volume', expression: 'E1', volume: 50 },
-  ]);
+  const event = events.find((entry) => entry.type === 'expression');
+  assert.equal(event.expression, 'E1');
+  assert.equal(event.binding.volume, true);
+  assert.equal(event.raw, 63);
 });
 
 test('a tempo subdivision expression never writes to the delay parameter', () => {
@@ -83,6 +84,8 @@ test('a tempo subdivision expression never writes to the delay parameter', () =>
   const event = events.find((entry) => entry.type === 'expression');
   assert.equal(event.tempo, true);
   assert.equal(event.value, 64);
+  assert.equal(event.raw, 64);
+  assert.equal(event.binding.target, 'del');
 });
 
 test('a footswitch value of 0 turns off every block assigned to it', () => {
@@ -137,30 +140,33 @@ test('toggle mode flips each assigned block from its own cached state', () => {
   assert.deepEqual(sent[3], buildCc(1, 21, 0));
 });
 
-test('an expression pedal forwards CC values to a parameter CC', () => {
-  const { router, sent } = setup({
+test('an expression pedal hands its raw value to the engine resolver', () => {
+  const { router, sent, events } = setup({
     row: {
       preset: 1, name: 'Expr', stomps: [],
       expressions: [{ id: 'E1', trigger: { type: 'cc', channel: 1, number: 7 }, target: 'fx1', paramIndex: 1 }],
     },
   });
   router.handleMidi({ port: 'GT-10', bytes: [0xb0, 7, 64] });
-  assert.deepEqual(sent, [buildCc(1, 51, 64)]);
+  assert.deepEqual(sent, []);
+  const event = events.find((entry) => entry.type === 'expression');
+  assert.equal(event.raw, 64);
+  assert.equal(event.binding.paramIndex, 1);
 });
 
-test('an expression can invert its range', () => {
-  const { router, sent } = setup({
+test('an expression can be inverted by the resolver', () => {
+  const { router, events } = setup({
     row: {
       preset: 1, name: 'Expr', stomps: [],
       expressions: [{ id: 'E1', trigger: { type: 'cc', channel: 1, number: 7 }, target: 'fx1', paramIndex: 1, invert: true }],
     },
   });
   router.handleMidi({ port: 'GT-10', bytes: [0xb0, 7, 0] });
-  assert.deepEqual(sent, [buildCc(1, 51, 127)]);
+  assert.equal(events.find((entry) => entry.type === 'expression').binding.invert, true);
 });
 
-test('an expression with an input window rescales incoming CC values', () => {
-  const { router, sent } = setup({
+test('an expression input window is preserved for the resolver', () => {
+  const { router, events } = setup({
     row: {
       preset: 1, name: 'Expr', stomps: [],
       expressions: [{ id: 'E1', trigger: { type: 'cc', channel: 1, number: 7 }, target: 'fx1', paramIndex: 0, inputMin: 20, inputMax: 100 }],
@@ -169,7 +175,7 @@ test('an expression with an input window rescales incoming CC values', () => {
   router.handleMidi({ port: 'GT-10', bytes: [0xb0, 7, 20] });
   router.handleMidi({ port: 'GT-10', bytes: [0xb0, 7, 100] });
   router.handleMidi({ port: 'GT-10', bytes: [0xb0, 7, 10] });
-  assert.deepEqual(sent, [buildCc(1, 50, 0), buildCc(1, 50, 127), buildCc(1, 50, 0)]);
+  assert.deepEqual(events.filter((entry) => entry.type === 'expression').map((e) => e.raw), [20, 100, 10]);
 });
 
 test('learn mode captures the next controller message and stops listening', () => {

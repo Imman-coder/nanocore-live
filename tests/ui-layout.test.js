@@ -155,15 +155,15 @@ test('Live editing suppresses performance triggers', () => {
   assert.match(live, /disabled=\{editing\}/);
 });
 
-test('controller expression feedback mirrors into the editor snapshot', () => {
-  assert.match(engine, /noteParameter\(block, index, event\.value \/ 127\)/);
-  assert.match(engine, /event\.value \/ 127/);
-  assert.match(engine, /function applyVolumeFromExpression[\s\S]{0,500}render\(\)/);
-  assert.match(engine, /event\.tempo/);
+test('controller and on-screen expressions share one engine dispatcher', () => {
+  const resolverSource = readFileSync(new URL('../src/engine/resolver.js', import.meta.url), 'utf8');
+  const dispatcherSource = readFileSync(new URL('../src/engine/dispatcher.js', import.meta.url), 'utf8');
+  assert.match(resolverSource, /export function resolveExpression/);
+  assert.match(dispatcherSource, /command\.type === 'expression'/);
+  assert.match(engine, /createDispatcher/);
+  assert.match(engine, /dispatcher\.dispatch\(command\)/);
   assert.match(editor, /openPopup\(entry\.index, entry\.param, entry\.synced\)/);
   assert.match(read('PedalPopup'), /target\.tempo/);
-  assert.match(engine, /function subdivisionIndexForRaw/);
-  assert.match(engine, /sendExpression\(pedalId, value\)[\s\S]{0,500}mapping\.tempo/);
 });
 
 test('demo data stays sandboxed in the Svelte engine', () => {

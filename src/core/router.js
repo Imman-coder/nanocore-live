@@ -2,7 +2,6 @@
 // Pure logic: no browser APIs here, so it is fully testable in node.
 import { buildCc, buildPc, buildRequestSysEx, COMMAND, FIELD } from './messages.js';
 import { BLOCK_BY_ID } from './spec.js';
-import { expressionBytes } from './live.js';
 
 const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
 
@@ -95,19 +94,30 @@ export function createRouter({ globals, getActiveRow, send, onEvent = () => {}, 
 
     for (const expression of row.expressions ?? []) {
       if (!sameTrigger(expression.trigger, message)) continue;
-      if (expression.tempo) {
-        emit({ type: 'expression', expression: expression.id, target: expression.target, tempo: true, cc: null, value: message.value });
-        continue;
-      }
-      const variant = typeof expression.target === 'object' ? (expression.target.variant ?? 0) : getVariant(expression.target);
-      const bytes = expressionBytes(expression, globals.midiChannel ?? 1, variant, message.value);
-      send(bytes, `expression:${expression.id}`);
-      emit({ type: 'expression', expression: expression.id, cc: bytes[1], value: bytes[2] });
+      const variant = typeof expression.target === 'object'
+        ? (expression.target.variant ?? 0)
+        : getVariant(expression.target);
+      emit({
+        type: 'expression',
+        expression: expression.id,
+        binding: expression,
+        raw: message.value,
+        value: message.value,
+        cc: null,
+        variant,
+        ...(expression.tempo ? { tempo: true, target: expression.target } : {}),
+      });
     }
 
     const volumePedal = (globals.expressionPedals ?? []).find((pedal) => pedal.id === globals.volumePedal);
     if (volumePedal && message.value !== null && sameTrigger(volumePedal.trigger, message)) {
-      emit({ type: 'expression-volume', expression: volumePedal.id, volume: Math.round((message.value / 127) * 100) });
+      emit({
+        type: 'expression',
+        expression: volumePedal.id,
+        binding: { ...volumePedal, volume: true },
+        raw: message.value,
+        value: message.value,
+      });
     }
   }
 
