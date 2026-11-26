@@ -1,10 +1,11 @@
 <script>
   // Right-click expression assignment popup. One pedal drives one parameter
   // per preset; pedals occupied by global preset volume are unavailable.
-  import { onDestroy } from 'svelte';
+  import { onDestroy, onMount } from 'svelte';
   import { app, ctx as engineCtx } from '../engine.js';
   import { BLOCK_BY_ID } from '../../core/spec.js';
   import { expressionRawToPercent, expressionPercentToRaw } from '../../core/live.js';
+  import { createDaisyDualRange } from 'daisy-dual-range';
 
   export let target;
   export let onClose = () => {};
@@ -20,6 +21,10 @@
   let error = '';
   let learnTimer = null;
   let lastTarget = null;
+  let pedalRangeEl;
+  let paramRangeEl;
+  let pedalRange;
+  let paramRange;
 
   $: preset = $app.state?.activePreset ?? 1;
   $: assignments = ($app.state, ctx.assignments);
@@ -40,12 +45,29 @@
     outMaxPercent = expressionRawToPercent(current?.outputMax ?? 127);
     invert = Boolean(current?.invert);
     error = '';
+    pedalRange?.set([minPercent, maxPercent]);
+    paramRange?.set([outMinPercent, outMaxPercent]);
   }
 
   $: if (target && target !== lastTarget) {
     lastTarget = target;
     reset();
   }
+
+  onMount(() => {
+    pedalRange = createDaisyDualRange(pedalRangeEl, {
+      min: 0, max: 100, value: [minPercent, maxPercent], step: 1, color: 'primary',
+    });
+    pedalRange.on('update', ([min, max]) => { minPercent = min; maxPercent = max; });
+    paramRange = createDaisyDualRange(paramRangeEl, {
+      min: 0, max: 100, value: [outMinPercent, outMaxPercent], step: 1, color: 'secondary',
+    });
+    paramRange.on('update', ([min, max]) => { outMinPercent = min; outMaxPercent = max; });
+    return () => {
+      pedalRange?.destroy();
+      paramRange?.destroy();
+    };
+  });
 
   function fail(text) { error = text; }
 
@@ -126,16 +148,17 @@
     {/if}
 
     <h3 class="mb-2 mt-3.5 text-xs uppercase tracking-[0.08em] text-muted">Pedal</h3>
+    <p class="text-xs text-muted">Selected: <b>{chosen?.name ?? 'None'}</b></p>
     <div class="my-2 flex flex-wrap gap-2">
       {#each pedals as item (item.id)}
         {@const usedGlobally = globalVolumeId === item.id}
-        <button class="flex min-w-[120px] flex-col gap-1 rounded-[10px] border border-line bg-panel-2 p-2.5 cursor-pointer font-[inherit] text-inherit text-left hover:border-accent disabled:cursor-not-allowed disabled:opacity-50 {pedal === item.id ? 'border-accent bg-[#30281b]' : ''}"
+        <button class="btn flex min-w-[120px] flex-col gap-1 text-left {pedal === item.id ? 'btn-primary' : 'btn-outline'}"
           disabled={usedGlobally}
           title={usedGlobally ? 'Used globally for preset volume — clear it in Globals first' : undefined}
           on:click={() => choosePedal(item.id)}
         >
           <b>{item.name}</b>
-          <span class="text-muted text-xs">{usedGlobally ? 'Global · Preset volume' : ctx.describeTrigger(item.trigger)}</span>
+          <span class="text-xs {pedal === item.id ? 'text-primary-content opacity-80' : 'text-muted'}">{usedGlobally ? 'Global · Preset volume' : ctx.describeTrigger(item.trigger)}</span>
         </button>
       {/each}
     </div>
@@ -158,17 +181,19 @@
     </div> -->
 
     <h3 class="mb-2 mt-3.5 text-xs uppercase tracking-[0.08em] text-muted">Value range mapping</h3>
-    <div class="mb-2.5 flex flex-wrap items-center gap-2">
-      <label for="popup-min" class="text-xs text-muted min-w-[90px]">Pedal min (%)</label>
-      <input id="popup-min" class="input input-bordered input-sm" type="number" min="0" max="100" step="1" bind:value={minPercent}>
-      <label for="popup-max" class="text-xs text-muted min-w-[90px]">Pedal max (%)</label>
-      <input id="popup-max" class="input input-bordered input-sm" type="number" min="0" max="100" step="1" bind:value={maxPercent}>
-      <label for="popup-out-min" class="text-xs text-muted min-w-[90px]">Parameter min (%)</label>
-      <input id="popup-out-min" class="input input-bordered input-sm" type="number" min="0" max="100" step="1" bind:value={outMinPercent}>
-      <label for="popup-out-max" class="text-xs text-muted min-w-[90px]">Parameter max (%)</label>
-      <input id="popup-out-max" class="input input-bordered input-sm" type="number" min="0" max="100" step="1" bind:value={outMaxPercent}>
-      <label for="popup-invert" class="text-xs text-muted min-w-[90px]"><input id="popup-invert" class="checkbox checkbox-sm checkbox-primary" type="checkbox" bind:checked={invert}> Invert</label>
+    <div class="mb-3">
+      <div class="flex items-center justify-between text-xs text-muted">
+        <span>Pedal window</span><span>{minPercent}% – {maxPercent}%</span>
+      </div>
+      <div bind:this={pedalRangeEl} aria-label="Pedal input window"></div>
     </div>
+    <div class="mb-2.5">
+      <div class="flex items-center justify-between text-xs text-muted">
+        <span>Parameter window</span><span>{outMinPercent}% – {outMaxPercent}%</span>
+      </div>
+      <div bind:this={paramRangeEl} aria-label="Parameter output window"></div>
+    </div>
+    <label for="popup-invert" class="text-xs text-muted min-w-[90px]"><input id="popup-invert" class="checkbox checkbox-sm checkbox-primary" type="checkbox" bind:checked={invert}> Invert</label>
     <p class="text-xs text-muted">The pedal window and the parameter window are independent. Values outside the pedal window are clamped.</p>
     {#if error}<p class="border-accent text-accent" role="alert">{error}</p>{/if}
     <div class="mb-1 mt-4 flex flex-wrap items-center gap-2">

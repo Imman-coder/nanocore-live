@@ -351,13 +351,6 @@
             on:click={() => ctx.savePreset()}>Save to pedal</button>
         </div>
       </div>
-      <!-- <div class="text-muted text-xs">
-        {#if snapshot}
-          {$app.demo ? 'Demo snapshot' : 'Loaded from the pedal'}: preset {snapshot.activePreset + 1}, volume {snapshot.volume}
-        {:else}
-          Connect and read the snapshot to edit the current preset.
-        {/if}
-      </div> -->
     </div>
 
 {#if !snapshot}
@@ -394,21 +387,19 @@
             on:dragend={() => endChainDrag(false)}
             on:pointerdown={onRowPointerDown}
           >
-            <!-- <span class="text-[11px] text-muted">{position + 1}</span> -->
             <span class="font-extrabold">{definition.name}</span>
             <span class="text-[11px] text-muted">{assetName || effectType?.shortName || effectType?.name || (id === 'amp' || id === 'cab' ? 'loading…' : '—')}</span>
-            <!-- <span class="text-[11px] text-muted">{item.enabled ? 'ON' : 'off'}</span> -->
+
             <div >
               <input type="checkbox" class="hidden" id="fx-switch" on:change={changeEnabled}>
               <label for="fx-switch">
-                <div class="btn btn-square btn-sm { item.enabled==true ? 'btn-accent' : '' } ">
+                <div class="btn btn-outline button-neutral btn-square btn-sm { item.enabled==true ? 'btn-accent' : '' } ">
                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M5.636 5.636a9 9 0 1 0 12.728 0M12 3v9" />
                   </svg>
                 </div>
               </label>
             </div>
-            <!-- <span class="badge badge-outline badge-sm">{fs ?? 'no stomp'}</span> -->
         </button>
       </div>
       {/if}

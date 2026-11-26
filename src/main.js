@@ -1,3 +1,5 @@
+import 'nouislider/dist/nouislider.css';
+import 'daisy-dual-range/style.css';
 import './app.css';
 import App from './App.svelte';
 

@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 const read = (name) => readFileSync(new URL(`../src/lib/components/${name}.svelte`, import.meta.url), 'utf8');
 const app = readFileSync(new URL('../src/App.svelte', import.meta.url), 'utf8');
 const engine = readFileSync(new URL('../src/lib/engine.js', import.meta.url), 'utf8');
+const main = readFileSync(new URL('../src/main.js', import.meta.url), 'utf8');
 const css = readFileSync(new URL('../src/app.css', import.meta.url), 'utf8');
 const start = read('Start');
 const settings = read('Settings');
@@ -126,6 +127,14 @@ test('expression faders recall values and slide relatively by default', () => {
   assert.match(popup, /z-0/);
   assert.match(popup, /z-10/);
   assert.match(popup, /overflow-y-auto/);
+  assert.match(popup, /createDaisyDualRange/);
+  assert.match(popup, /pedalRangeEl/);
+  assert.match(popup, /paramRangeEl/);
+  assert.match(main, /daisy-dual-range\/style\.css/);
+  assert.match(popup, /btn-outline/);
+  assert.match(popup, /btn-primary/);
+  assert.match(popup, /Selected:/);
+  assert.doesNotMatch(popup, /bg-\[#30281b\]/);
 });
 
 test('demo data stays sandboxed in the Svelte engine', () => {
