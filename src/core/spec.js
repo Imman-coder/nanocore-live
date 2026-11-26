@@ -35,8 +35,6 @@ function decorate(block) {
   };
 }
 
-export const BLOCK_DEFINITIONS = { fx1, fx2, amp, cab, mod, del, rev, eq };
-
 // Display order differs from the snapshot order (MOD comes before DEL here).
 export const BLOCKS = [fx1, fx2, amp, cab, mod, del, rev, eq].map(decorate);
 
@@ -47,7 +45,6 @@ export const chainBlockIds = (chainOrder) =>
 
 export const BLOCK_BY_ID = Object.fromEntries(BLOCKS.map((b) => [b.id, b]));
 export const blockByCc = (cc) => BLOCKS.find((b) => b.onOffCc === cc);
-export const typeCcToBlock = (cc) => BLOCKS.find((b) => b.typeCc === cc);
 
 const PARAM_BASE = {
   fx1: 50, fx2_drive: 57, fx2_special: 68, amp: 60, cab: 65,
@@ -72,15 +69,3 @@ export function paramsFor(blockId, variant) {
   return [...(block.commonParams ?? []), ...(type?.params ?? [])];
 }
 
-export const GLOBAL_CONTROLS = [
-  { id: 'tuner', name: 'Tuner', cc: 80, description: '0 = off, 127 = on' },
-  { id: 'prev_preset', name: 'Previous preset', cc: 81, description: 'Send 127 to step back' },
-  { id: 'next_preset', name: 'Next preset', cc: 82, description: 'Send 127 to step forward' },
-];
-
-export const META = {
-  presetSlots: 64,
-  maxPresetSlots: 64,
-  midiChannel: 1,
-  bankSelectTrap: 'A non-zero CC0/CC32 makes the pedal ignore Program Changes until both return to 0.',
-};

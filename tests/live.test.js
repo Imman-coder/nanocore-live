@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { stompActive, toggleCc, sceneStored, sceneBlockParticipates, expressionBytes, expressionRawToPercent, expressionPercentToRaw, normalizedExpression, expressionRawForNormalized, expressionRawFromRelative } from '../src/core/live.js';
+import { stompActive, toggleCc, sceneStored, sceneBlockParticipates, expressionRawToPercent, expressionPercentToRaw, normalizedExpression, expressionRawForNormalized, expressionRawFromRelative } from '../src/core/live.js';
 import { captureBase, baseForPreset, overrideBase } from '../src/core/base.js';
 import { connectionHint } from '../src/core/capabilities.js';
 
@@ -52,15 +52,6 @@ test('expression input window maps onto a selected parameter window', () => {
   assert.ok(Math.abs(at(50) - 0.55) < 0.02);
   const inverted = { ...mapping, invert: true };
   assert.ok(Math.abs(normalizedExpression(inverted, expressionPercentToRaw(5)) - 0.80) < 0.02);
-});
-
-test('a live expression control maps its value through the assignment window', () => {
-  const mapping = { id: 'E1', target: 'fx1', paramIndex: 0, inputMin: 0, inputMax: 127, invert: false };
-  assert.deepEqual(expressionBytes(mapping, 1, 0, 64), [0xb0, 50, 64]);
-  const reversed = { ...mapping, inputMin: 127, inputMax: 0 };
-  assert.deepEqual(expressionBytes(reversed, 1, 0, 127), [0xb0, 50, 0]);
-  const inverted = { ...mapping, invert: true };
-  assert.deepEqual(expressionBytes(inverted, 1, 0, 0), [0xb0, 50, 127]);
 });
 
 test('expression recall is the inverse of the live expression mapping', () => {

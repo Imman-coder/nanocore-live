@@ -103,8 +103,6 @@ function notify(message) {
   emit();
 }
 
-function updateTempoUI() { /* tempo is derived from state in Svelte */ }
-
 function syncDelays() {
   const tempo = state.globals.tempo;
   if (!snapshot || !state.globals.tempoSync || !tempo?.bpm) return 0;
@@ -729,18 +727,15 @@ export const ctx = {
     const bpm = tapBpm(tempoTaps, now);
     if (!bpm) {
       notify('Keep tapping to set a tempo');
-      updateTempoUI();
       return;
     }
     state = { ...state, globals: { ...state.globals, tempo: { ...state.globals.tempo, bpm } } };
     persist();
-    updateTempoUI();
     syncDelays();
   },
   setTempo(patch) {
     state = { ...state, globals: { ...state.globals, tempo: { ...(state.globals.tempo ?? {}), ...patch } } };
     persist();
-    updateTempoUI();
     syncDelays();
   },
   syncDelays,

@@ -32,6 +32,3 @@ export function onOffToCc(on) {
   return on ? 127 : 0;
 }
 
-export function ccToOnOff(cc) {
-  return cc >= 64;
-}

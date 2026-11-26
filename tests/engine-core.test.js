@@ -37,6 +37,13 @@ test('engine resolver: one resolver maps param, tempo and volume bindings', () =
   assert.equal(volume.value, 100);
 });
 
+test('engine resolver preserves reversed and inverted pedal windows', () => {
+  const base = binding('E1', { target: 'fx1', paramIndex: 0 });
+  assert.deepEqual(resolveExpression(base, 64, { channel: 1, variant: 0 }).bytes, [0xb0, 50, 64]);
+  assert.deepEqual(resolveExpression({ ...base, inputMin: 127, inputMax: 0 }, 127, { channel: 1, variant: 0 }).bytes, [0xb0, 50, 0]);
+  assert.deepEqual(resolveExpression({ ...base, invert: true }, 0, { channel: 1, variant: 0 }).bytes, [0xb0, 50, 127]);
+});
+
 test('engine resolver: initial raw values follow the assigned target', () => {
   let state = createDefaultState();
   state = setParamPedal(state, 1, 'fx1', 0, { ...binding('E1'), pedal: 'E1' });

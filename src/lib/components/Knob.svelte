@@ -10,17 +10,13 @@
   export let label = '';
   export let display = '';
   export let stepLabels = null;
-  export let labels = null;
-  export let stepLabel = null;
 
   const dispatch = createEventDispatcher();
   let drag = null;
 
   $: ceiling = Math.max(1, Number(max) || 1);
   $: current = Math.max(0, Math.min(ceiling, Number(value) || 0));
-  $: detents = Array.isArray(stepLabels) ? stepLabels
-    : Array.isArray(labels) ? labels
-      : typeof stepLabel === 'string' && stepLabel ? stepLabel.split('|') : null;
+  $: detents = Array.isArray(stepLabels) ? stepLabels : null;
   $: angle = -135 + (current / ceiling) * 270;
   $: ringLength = 2 * Math.PI * 29;
   $: trackArc = ringLength * 0.75;

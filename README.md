@@ -93,13 +93,15 @@ Taken from `docs/MIDI_MAPPING_NOTES.md` (hardware-verified) and `docs/midi-findi
 ## Layout
 
 ```
-index.html, styles.css, server.js
-src/core/      scaling, messages, spec, snapshot, router, store  (pure, tested)
-src/transports/webmidi.js, webbluetooth.js
-src/ui/        app.js, editor.js, live.js, globals.js
-tests/         node:test suites for all pure logic + both transports
-src/data/      effect parameter definitions transliterated from the upstream editor
-docs/          the two source documents
+index.html, server.js
+src/main.js     Svelte entry
+src/App.svelte, src/lib/components/   UI
+src/lib/engine.js        gateway: transports, effects, stable ctx API
+src/engine/              targets, pure resolver, dispatcher, selectors
+src/core/                pure protocol, routing, snapshot, store (tested)
+src/transports/          Web MIDI, BLE, demo
+src/data/                effect definitions and per-version firmware tables
+tests/                   node:test suites for pure logic and engine wiring
 ```
 
-No build step, no dependencies.
+`npm run build` produces `dist/` and its generated service worker.

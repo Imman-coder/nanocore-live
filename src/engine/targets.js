@@ -33,7 +33,3 @@ export function targetFromBinding(binding) {
   if (!block) return null;
   return { kind: 'param', block, index: Number(binding.paramIndex ?? 0) || 0 };
 }
-
-export const paramTarget = (block, index) => ({ kind: 'param', block, index: Number(index) || 0 });
-export const tempoTarget = (block) => ({ kind: 'tempo', block });
-export const volumeTarget = () => ({ kind: 'volume' });
