@@ -1,9 +1,9 @@
 <script>
-  import { app, ctx } from '../engine.js';
+  import { stateView, snapshotView, feedbackView, uiView, ctx } from '../engine.js';
 
-  $: ports = $app.ports ?? { inputs: [], outputs: [] };
-  $: devicePorts = $app.devicePorts ?? { inputs: [], outputs: [] };
-  $: selection = $app.state?.globals?.portSelection ?? {};
+  $: ports = $uiView.ports ?? { inputs: [], outputs: [] };
+  $: devicePorts = $uiView.devicePorts ?? { inputs: [], outputs: [] };
+  $: selection = $stateView?.globals?.portSelection ?? {};
   $: isWebMidi = devicePorts.outputs.some((port) => port.type === 'output');
 
   let deviceInputId = '';
@@ -75,7 +75,7 @@
   <button data-devices-scan class="btn" on:click={() => ctx.scanPorts()}>Scan devices</button>
 </div>
 
-{#if !(ports.inputs.length || $app.connected)}
+{#if !(ports.inputs.length || $uiView.connected)}
   <div class="alert">Scan MIDI devices or connect first to see the available ports.</div>
 {:else}
   <div class="card mb-3 overflow-x-auto border border-base-300 bg-base-200">
@@ -130,4 +130,4 @@
   <!-- </div> -->
 {/if}
 
-<p class="mt-3 text-xs text-muted">Last device reply: {$app.lastReply ?? 'none'}</p>
+<p class="mt-3 text-xs text-muted">Last device reply: {$uiView.lastReply ?? 'none'}</p>

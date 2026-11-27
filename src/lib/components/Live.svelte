@@ -2,7 +2,7 @@
   // Live performance view: preset navigation, the editable grid board and the
   // optional raw assignments table. Fit-to-screen scales the board, never clips.
   import { afterUpdate, onDestroy, onMount } from 'svelte';
-  import { app, ctx as engineCtx } from '../engine.js';
+  import { stateView, snapshotView, feedbackView, uiView, ctx as engineCtx } from '../engine.js';
   import Assignments from './Assignments.svelte';
   import LiveGrid from './LiveGrid.svelte';
 
@@ -11,12 +11,12 @@
   let wrapEl;
   let boardEl;
 
-  $: state = $app.state ?? {};
+  $: state = $stateView ?? {};
   $: globals = state.globals ?? {};
   $: layout = globals.liveLayout ?? {};
   $: preset = state.activePreset ?? 1;
   $: editing = Boolean(state.liveEditing);
-  $: presets = ($app.state, Array.from({ length: 64 }, (_, index) => index + 1)
+  $: presets = ($stateView, Array.from({ length: 64 }, (_, index) => index + 1)
     .map((number) => ({ number, label: ctx.presetLabel(number) })));
   $: edited = Object.keys(state.presets ?? {}).map(Number).sort((a, b) => a - b)
     .filter((number) => ctx.isPresetEdited(number));

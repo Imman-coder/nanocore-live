@@ -1,6 +1,6 @@
 <script>
   // Per-preset MIDI assignment editor plus the raw IN → OUT table used by Live.
-  import { app, ctx as engineCtx } from '../engine.js';
+  import { stateView, snapshotView, feedbackView, uiView, ctx as engineCtx } from '../engine.js';
   import { BLOCKS, BLOCK_BY_ID, paramCcFor } from '../../core/spec.js';
   import { effectiveStompLabel } from '../../core/store.js';
 
@@ -8,9 +8,9 @@
   export let assignments = null;
   export let tableOnly = false;
 
-  $: preset = $app.state?.activePreset ?? 1;
-  $: current = assignments ?? ($app.state, ctx.assignments);
-  $: footswitches = $app.state?.globals?.footswitches ?? [];
+  $: preset = $stateView?.activePreset ?? 1;
+  $: current = assignments ?? ($stateView, ctx.assignments);
+  $: footswitches = $stateView?.globals?.footswitches ?? [];
   $: expressions = current?.expressions ?? [];
   $: stomps = current?.stomps ?? [];
 
@@ -76,7 +76,7 @@
     <tbody>
       {#each footswitches as fs (fs.id)}
         <tr>
-          <td class="border-b border-line px-1.5 py-1.5 text-left">{effectiveStompLabel($app.state, current, fs.id)}</td>
+          <td class="border-b border-line px-1.5 py-1.5 text-left">{effectiveStompLabel($stateView, current, fs.id)}</td>
           <td class="border-b border-line px-1.5 py-1.5 text-left">{ctx.describeTrigger(fs.trigger)}</td>
           <td class="border-b border-line px-1.5 py-1.5 text-left">
             {(stomp(fs.id).targets ?? []).map((target) =>
@@ -173,7 +173,7 @@
       <tbody>
         {#each footswitches as fs (fs.id)}
           <tr>
-            <td class="border-b border-line px-1.5 py-1.5 text-left">{effectiveStompLabel($app.state, current, fs.id)}</td>
+            <td class="border-b border-line px-1.5 py-1.5 text-left">{effectiveStompLabel($stateView, current, fs.id)}</td>
             <td class="border-b border-line px-1.5 py-1.5 text-left">{ctx.describeTrigger(fs.trigger)}</td>
             <td class="border-b border-line px-1.5 py-1.5 text-left">{(stomp(fs.id).targets ?? []).map((target) => `${BLOCK_BY_ID[target.block]?.name}:CC${BLOCK_BY_ID[target.block]?.onOffCc}=${target.value ?? 'incoming'}`).join(', ') || '—'}</td>
           </tr>

@@ -3,7 +3,7 @@
   // value currently on the device and adds pointer travel. Globals can opt into
   // absolute position mapping. Always interactive, even when unassigned.
   import { afterUpdate, onDestroy, onMount } from 'svelte';
-  import { app, ctx as engineCtx } from '../engine.js';
+  import { stateView, snapshotView, feedbackView, uiView, ctx as engineCtx } from '../engine.js';
   import { BLOCK_BY_ID } from '../../core/spec.js';
   import { expressionRawToPercent, expressionRawFromRelative } from '../../core/live.js';
 
@@ -18,33 +18,33 @@
 
   const seeded = ctx.expressionInitialValue(pedal?.id);
   let raw = Number.isFinite(seeded) ? seeded : 0;
-  let seedSnapshot = $app.snapshot;
-  let seedPreset = $app.state?.activePreset;
-  let lastFeedback = $app.expressionValues?.[pedal?.id];
+  let seedSnapshot = $snapshotView;
+  let seedPreset = $stateView?.activePreset;
+  let lastFeedback = $feedbackView?.[pedal?.id];
 
   function seedValue() {
     const value = ctx.expressionInitialValue(pedal?.id);
     raw = Number.isFinite(value) ? value : 0;
   }
 
-  $: snapshotNow = $app.snapshot;
-  $: presetNow = $app.state?.activePreset;
+  $: snapshotNow = $snapshotView;
+  $: presetNow = $stateView?.activePreset;
   $: if (!drag && (snapshotNow !== seedSnapshot || presetNow !== seedPreset)) {
     seedSnapshot = snapshotNow;
     seedPreset = presetNow;
     seedValue();
-    lastFeedback = $app.expressionValues?.[pedal?.id];
+    lastFeedback = $feedbackView?.[pedal?.id];
   }
 
   $: percent = expressionRawToPercent(raw);
-  $: mappings = ($app.state, ctx.assignments?.expressions ?? []);
+  $: mappings = ($stateView, ctx.assignments?.expressions ?? []);
   $: mapping = mappings.find((entry) => entry.id === pedal?.id) ?? null;
-  $: isVolume = $app.state?.globals?.volumePedal === pedal?.id;
+  $: isVolume = $stateView?.globals?.volumePedal === pedal?.id;
   $: assigned = Boolean(mapping || isVolume);
   $: targetLabel = mapping
     ? `${BLOCK_BY_ID[mapping.target]?.name ?? mapping.target} param ${mapping.paramIndex ?? 0}`
     : isVolume ? 'Preset volume' : 'unassigned';
-  $: feedback = $app.expressionValues?.[pedal?.id];
+  $: feedback = $feedbackView?.[pedal?.id];
   // Hardware feedback wins outside a gesture; inside one the local value stays
   // authoritative so a device snapshot cannot make the fader jump mid-drag.
   $: if (!drag && Number.isFinite(feedback) && feedback !== lastFeedback) {
@@ -97,13 +97,13 @@
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', endDrag);
     window.addEventListener('pointercancel', endDrag);
-    if ($app.state?.globals?.absoluteExpression) setFromPointer(event.clientX, event.clientY);
+    if ($stateView?.globals?.absoluteExpression) setFromPointer(event.clientX, event.clientY);
   }
 
   function onMove(event) {
     if (!drag) return;
     event.preventDefault();
-    if ($app.state?.globals?.absoluteExpression) {
+    if ($stateView?.globals?.absoluteExpression) {
       setFromPointer(event.clientX, event.clientY);
       return;
     }
@@ -116,7 +116,7 @@
 
   function endDrag() {
     drag = null;
-    lastFeedback = $app.expressionValues?.[pedal?.id];
+    lastFeedback = $feedbackView?.[pedal?.id];
     window.removeEventListener('pointermove', onMove);
     window.removeEventListener('pointerup', endDrag);
     window.removeEventListener('pointercancel', endDrag);

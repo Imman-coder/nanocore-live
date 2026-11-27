@@ -96,7 +96,8 @@ Taken from `docs/MIDI_MAPPING_NOTES.md` (hardware-verified) and `docs/midi-findi
 index.html, server.js
 src/main.js     Svelte entry
 src/App.svelte, src/lib/components/   UI
-src/lib/engine.js        gateway: transports, effects, stable ctx API
+src/lib/engine.js        orchestrator + stable ctx API
+src/lib/gateway/         viewmodel slices, device I/O, connection handling
 src/engine/              targets, pure resolver, dispatcher, selectors
 src/core/                pure protocol, routing, snapshot, store (tested)
 src/transports/          Web MIDI, BLE, demo

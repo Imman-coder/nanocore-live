@@ -18,11 +18,11 @@ const knob = read('Knob');
 
 test('the Svelte shell owns mode switching, settings, log and toast', () => {
   assert.match(app, /data-mode=\{mode\}/);
-  assert.match(app, /data-demo=\{\$app\.demo\}/);
+  assert.match(app, /data-demo=\{\$uiView\.demo\}/);
   assert.match(app, /<Settings open=/);
   assert.match(app, /MIDI/);
   assert.match(app, /fixed right-\[18px\] top-16 z-\[70\]/);
-  assert.match(engine, /export const app = writable/);
+  assert.match(engine, /export \{ app, stateView, snapshotView, feedbackView, uiView \}/);
   assert.match(engine, /export const ctx = \{/);
 });
 
@@ -39,7 +39,7 @@ test('Start offers direct demo entry and full transport setup', () => {
 test('Settings tab includes the demo-only real-data opt-in', () => {
   assert.match(settings, /data-setting="demo-use-real-data"/);
   assert.match(settings, /ctx\.setDemoUseRealData/);
-  assert.match(settings, /\$app\.demo \?/);
+  assert.match(settings, /\$uiView\.demo \?/);
   assert.match(settings, /id: 'connection'/);
   assert.match(settings, /id: 'devices'/);
   assert.match(settings, /id: 'globals'/);
@@ -166,9 +166,10 @@ test('controller and on-screen expressions share one engine dispatcher', () => {
   assert.match(read('PedalPopup'), /target\.tempo/);
 });
 
-test('demo data stays sandboxed in the Svelte engine', () => {
-  assert.match(engine, /sandboxState/);
-  assert.match(engine, /workingStorage/);
-  assert.match(engine, /demoUseRealData/);
-  assert.match(engine, /setDemoUseRealData/);
+test('demo data stays sandboxed in the connection gateway', () => {
+  const gateway = readFileSync(new URL('../src/lib/gateway/connection.js', import.meta.url), 'utf8');
+  assert.match(gateway, /sandboxState/);
+  assert.match(gateway, /workingStorage/);
+  assert.match(gateway, /demoUseRealData/);
+  assert.match(gateway, /setDemoUseRealData/);
 });

@@ -2,7 +2,7 @@
   // Live board: explicit CSS grid of individually placed performance items.
   // Editing supports HTML5 drag for mouse and a pointer fallback for touch/pen.
   import { onDestroy } from 'svelte';
-  import { app, ctx as engineCtx } from '../engine.js';
+  import { stateView, snapshotView, feedbackView, uiView, ctx as engineCtx } from '../engine.js';
   import ExpressionFader from './ExpressionFader.svelte';
   import { sceneStored } from '../../core/live.js';
   import { effectiveStompLabel } from '../../core/store.js';
@@ -15,21 +15,21 @@
   let resizing = null;
   let dropTarget = null;
 
-  $: state = $app.state ?? {};
+  $: state = $stateView ?? {};
   $: globals = state.globals ?? {};
   $: layout = globals.liveLayout?.grid ?? { columns: 4, rows: 3, items: [] };
   $: columns = Math.max(1, Math.min(64, Number(layout.columns) || 4));
   $: rows = Math.max(1, Math.min(64, Number(layout.rows) || 3));
   $: editing = Boolean(state.liveEditing);
-  $: assignments = ($app.state, ctx.assignments);
+  $: assignments = ($stateView, ctx.assignments);
   $: scenes = ctx.sceneKeys().map((key) => ({
     key, name: ctx.sceneName(key), stored: sceneStored(assignments, key),
   }));
   $: stomps = (globals.footswitches ?? []).map((fs) => ({
-    ...fs, label: effectiveStompLabel($app.state, assignments, fs.id), active: ctx.stompActive(fs.id),
+    ...fs, label: effectiveStompLabel($stateView, assignments, fs.id), active: ctx.stompActive(fs.id),
   }));
   $: pedals = globals.expressionPedals ?? [];
-  $: presets = ($app.state, Array.from({ length: 64 }, (_, index) => index + 1)
+  $: presets = ($stateView, Array.from({ length: 64 }, (_, index) => index + 1)
     .map((number) => ({ number, label: ctx.presetLabel(number) })));
   $: placed = (layout.items ?? []).map((item) => {
     const col = Math.max(1, Math.min(columns, Number(item.col) || 1));

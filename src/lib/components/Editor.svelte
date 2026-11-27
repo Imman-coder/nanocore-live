@@ -3,7 +3,7 @@
   // Chain reorder works with HTML5 drag (mouse) and a pointer fallback for
   // touch/pen; re-renders never cancel a gesture via lostpointercapture.
   import { onDestroy } from 'svelte';
-  import { app, ctx as engineCtx } from '../engine.js';
+  import { stateView, snapshotView, feedbackView, uiView, ctx as engineCtx } from '../engine.js';
   import Knob from './Knob.svelte';
   import PedalPopup from './PedalPopup.svelte';
   import { BLOCK_BY_ID, chainBlockIds } from '../../core/spec.js';
@@ -30,18 +30,18 @@
   let chainTouch = null;
   let suppressChainClick = false;
 
-  $: state = $app.state ?? {};
-  $: snapshot = $app.snapshot ?? null;
-  $: names = $app.names ?? {};
+  $: state = $stateView ?? {};
+  $: snapshot = $snapshotView ?? null;
+  $: names = $uiView.names ?? {};
   $: globals = state.globals ?? {};
   $: preset = state.activePreset ?? 1;
-  $: assignments = ($app.state, ctx.assignments);
+  $: assignments = ($stateView, ctx.assignments);
   $: forgetCount = sceneOffBlock
     ? Object.values(assignments?.scenes ?? {}).reduce((sum, scene) =>
         sum + Object.keys(scene ?? {}).filter((key) => key.startsWith(`${sceneOffBlock}:`)).length, 0)
       + Object.keys(assignments?.base?.values ?? {}).filter((key) => key.startsWith(`${sceneOffBlock}:`)).length
     : 0;
-  $: firmware = $app.firmware ?? ctx.firmware;
+  $: firmware = $uiView.firmware ?? ctx.firmware;
   $: chain = chainBlockIds(snapshot?.chainOrder);
   $: byId = Object.fromEntries((snapshot?.blocks ?? []).map((block) => [block.id, block]));
   $: selected = chain.includes(state.selectedBlock) ? state.selectedBlock : chain[0];
@@ -61,7 +61,7 @@
     ? [...(block.commonParams ?? []), ...extraCommonParams(selected, firmware), ...(type?.params ?? [])]
     : [];
   $: timeParams = params.some((param) => param.label === 'Time' || param.label === 'Delay');
-  $: sync = selected ? ($app.state, ctx.tempoSyncFor(selected)) : { enabled: false, subdivision: '1/8' };
+  $: sync = selected ? ($stateView, ctx.tempoSyncFor(selected)) : { enabled: false, subdivision: '1/8' };
   $: tempoSynced = Boolean(timeParams && sync.enabled);
   $: subdivisionIndex = Math.max(0, SUBDIVISIONS.findIndex((entry) => entry.id === sync.subdivision));
   $: visibleParams = params.map((param, index) => ({
@@ -71,8 +71,8 @@
   }));
   $: stompRaw = assignments?.blockStomps?.[selected];
   $: stompId = typeof stompRaw === 'string' ? stompRaw : stompRaw?.fs;
-  $: sceneOn = selected ? ($app.state, ctx.sceneBlockEnabled(selected)) : false;
-  $: scenes = ($app.state, ctx.sceneKeys().map((key) => ({
+  $: sceneOn = selected ? ($stateView, ctx.sceneBlockEnabled(selected)) : false;
+  $: scenes = ($stateView, ctx.sceneKeys().map((key) => ({
     key,
     name: ctx.sceneName(key),
     stored: sceneStored(assignments, key),
@@ -80,7 +80,7 @@
       : key === 'base' ? (ctx.baseOverridden() ? 'saved values' : 'pedal values')
         : `${Object.keys(assignments?.scenes?.[key] ?? {}).length} values · ${Object.keys(assignments?.sceneEnabled?.[key] ?? {}).length} fx`,
   })));
-  $: badges = ($app.state.globals?.expressionPedals ?? []).map((pedal) => {
+  $: badges = ($stateView.globals?.expressionPedals ?? []).map((pedal) => {
     const entry = Object.entries(assignments?.paramPedals ?? {}).find(([, mapping]) => mapping?.pedal === pedal.id);
     const globalVolume = globals.volumePedal === pedal.id;
     const [block, index] = entry ? entry[0].split(':') : [null, null];
@@ -90,7 +90,7 @@
       : globalVolume ? 'Preset volume · Globals' : 'free';
     return { id: pedal.id, target, assigned: Boolean(entry || globalVolume), globalVolume };
   });
-  $: presetNumbers = ($app.state, [...new Set([...Array.from({ length: 64 }, (_, i) => i + 1), preset])].sort((a, b) => a - b));
+  $: presetNumbers = ($stateView, [...new Set([...Array.from({ length: 64 }, (_, i) => i + 1), preset])].sort((a, b) => a - b));
   $: editedPresets = Object.keys(state.presets ?? {}).map(Number).sort((a, b) => a - b)
     .filter((number) => ctx.isPresetEdited(number));
   $: warning = block?.warning ?? type?.warning ?? null;

@@ -1,16 +1,16 @@
 <script>
   import { createEventDispatcher } from 'svelte';
-  import { app, ctx } from '../engine.js';
+  import { stateView, snapshotView, feedbackView, uiView, ctx } from '../engine.js';
   import { FIRMWARE_OPTIONS } from '../../core/versions.js';
 
   export let onOpenGlobals = null;
 
   const dispatch = createEventDispatcher();
 
-  $: selection = $app.state?.globals?.portSelection ?? {};
-  $: ports = $app.ports ?? { inputs: [], outputs: [] };
-  $: devicePorts = $app.devicePorts ?? { inputs: [], outputs: [] };
-  $: catalog = $app.catalog ?? { busy: false, message: '', presets: 0, amp: 0, ir: 0 };
+  $: selection = $stateView?.globals?.portSelection ?? {};
+  $: ports = $uiView.ports ?? { inputs: [], outputs: [] };
+  $: devicePorts = $uiView.devicePorts ?? { inputs: [], outputs: [] };
+  $: catalog = $uiView.catalog ?? { busy: false, message: '', presets: 0, amp: 0, ir: 0 };
   $: isWebMidi = devicePorts.outputs.some((port) => port.type === 'output');
 
   let deviceInputId = '';
@@ -43,9 +43,9 @@
   }
 </script>
 
-<h2 class="m-0 mb-3 text-lg">Start <span class="text-xs text-muted">{$app.demo ? '— demo pedal is running' : '— set up the pedal before editing'}</span></h2>
+<h2 class="m-0 mb-3 text-lg">Start <span class="text-xs text-muted">{$uiView.demo ? '— demo pedal is running' : '— set up the pedal before editing'}</span></h2>
 
-{#if $app.demo}
+{#if $uiView.demo}
   <div class="mb-3 rounded-xl border border-accent-2 bg-panel p-3.5 bg-[linear-gradient(120deg,#161a21,#162821)]">
     <h3 class="mb-2 mt-3.5 text-xs uppercase tracking-[0.08em] text-muted">Demo mode is running</h3>
     <p class="text-xs text-muted">A simulated NANOCORE is loaded with example presets, amp and cab names. Every control works locally; nothing is sent to hardware. Demo edits stay in this session unless you opt in to your saved data in Settings.</p>
@@ -68,24 +68,24 @@
     <h3 class="mb-2 mt-3.5 text-xs uppercase tracking-[0.08em] text-muted">1. Connection</h3>
     <div class="mb-2.5 flex flex-wrap items-center gap-2">
       <label for="start-transport" class="text-xs text-muted min-w-[90px]">Transport</label>
-      <select id="start-transport" value={$app.transportKind ?? 'webmidi'} class="select select-bordered select-sm" on:change={(event) => ctx.setTransportKind(event.currentTarget.value)}>
+      <select id="start-transport" value={$uiView.transportKind ?? 'webmidi'} class="select select-bordered select-sm" on:change={(event) => ctx.setTransportKind(event.currentTarget.value)}>
         <option value="webmidi">USB MIDI / paired Bluetooth MIDI</option>
         <option value="webbluetooth">Direct Bluetooth (Web Bluetooth)</option>
         <option value="demo">Demo mode (no pedal)</option>
       </select>
     </div>
-    <p class="text-xs text-muted">{$app.demo ? 'Demo mode uses a simulated pedal in this browser — no MIDI permissions or hardware are used.' : ctx.connectionHint()}</p>
+    <p class="text-xs text-muted">{$uiView.demo ? 'Demo mode uses a simulated pedal in this browser — no MIDI permissions or hardware are used.' : ctx.connectionHint()}</p>
     <div class="mb-2.5 flex flex-wrap items-center gap-2">
-      <button class="btn btn-primary" on:click={() => ($app.connected ? ctx.disconnect() : ctx.connect())}>{$app.connected ? 'Disconnect' : 'Connect'}</button>
+      <button class="btn btn-primary" on:click={() => ($uiView.connected ? ctx.disconnect() : ctx.connect())}>{$uiView.connected ? 'Disconnect' : 'Connect'}</button>
       <button class="btn" on:click={() => ctx.scanPorts()}>Scan MIDI devices</button>
       <button class="btn" on:click={() => ctx.readSnapshot()}>Read snapshot</button>
     </div>
-    <p class="text-xs text-muted">Status: <b>{$app.connected ? 'connected' : 'disconnected'}</b> · {$app.status}</p>
+    <p class="text-xs text-muted">Status: <b>{$uiView.connected ? 'connected' : 'disconnected'}</b> · {$uiView.status}</p>
   </section>
 
   <section class="mb-3 min-w-0 card border border-base-300 bg-base-200 p-3.5">
     <h3 class="mb-2 mt-3.5 text-xs uppercase tracking-[0.08em] text-muted">2. MIDI ports</h3>
-    {#if ports.inputs.length || $app.connected}
+    {#if ports.inputs.length || $uiView.connected}
       <div class="mb-2.5 flex flex-wrap items-center gap-2">
         <label class="text-xs text-muted min-w-[90px]">Send to NANOCORE</label>
         {#if isWebMidi}
@@ -121,25 +121,25 @@
     {:else}
       <p class="text-xs text-muted">Scan MIDI devices (or connect) to see the available ports.</p>
     {/if}
-    <p class="text-xs text-muted">Last device reply: {$app.lastReply ?? 'none'}</p>
+    <p class="text-xs text-muted">Last device reply: {$uiView.lastReply ?? 'none'}</p>
   </section>
 
   <section class="mb-3 min-w-0 card border border-base-300 bg-base-200 p-3.5">
     <h3 class="mb-2 mt-3.5 text-xs uppercase tracking-[0.08em] text-muted">3. MIDI settings</h3>
     <div class="mb-2.5 flex flex-wrap items-center gap-2">
       <label for="start-midi-channel" class="text-xs text-muted min-w-[90px]">MIDI channel</label>
-      <input id="start-midi-channel" data-setting="midiChannel" type="number" min="1" max="16" value={$app.state.globals.midiChannel ?? 1} class="input input-bordered input-sm" on:change={(event) => ctx.setGlobalSetting('midiChannel', event.currentTarget.value)} />
+      <input id="start-midi-channel" data-setting="midiChannel" type="number" min="1" max="16" value={$stateView.globals.midiChannel ?? 1} class="input input-bordered input-sm" on:change={(event) => ctx.setGlobalSetting('midiChannel', event.currentTarget.value)} />
     </div>
     <div class="mb-2.5 flex flex-wrap items-center gap-2">
       <label for="start-recall" class="text-xs text-muted min-w-[90px]">Preset recall</label>
-      <select id="start-recall" data-setting="recallMethod" value={($app.state.globals.recallMethod ?? 'sysex') === 'sysEx' ? 'sysEx' : 'cc'} class="select select-bordered select-sm" on:change={(event) => ctx.setGlobalSetting('recallMethod', event.currentTarget.value)}>
+      <select id="start-recall" data-setting="recallMethod" value={($stateView.globals.recallMethod ?? 'sysex') === 'sysEx' ? 'sysEx' : 'cc'} class="select select-bordered select-sm" on:change={(event) => ctx.setGlobalSetting('recallMethod', event.currentTarget.value)}>
         <option value="cc">CC 0 / CC 32 / Program Change</option>
         <option value="sysEx">SysEx field 09</option>
       </select>
     </div>
     <div class="mb-2.5 flex flex-wrap items-center gap-2">
       <label for="start-firmware" class="text-xs text-muted min-w-[90px]">Firmware</label>
-      <select id="start-firmware" data-setting="firmware" value={$app.state.globals.firmware ?? 'auto'} class="select select-bordered select-sm" on:change={(event) => ctx.setGlobalSetting('firmware', event.currentTarget.value)}>
+      <select id="start-firmware" data-setting="firmware" value={$stateView.globals.firmware ?? 'auto'} class="select select-bordered select-sm" on:change={(event) => ctx.setGlobalSetting('firmware', event.currentTarget.value)}>
         {#each FIRMWARE_OPTIONS as version}
           <option value={version}>{version}</option>
         {/each}
@@ -153,20 +153,20 @@
     <h3 class="mb-2 mt-3.5 text-xs uppercase tracking-[0.08em] text-muted">4. Names from the pedal</h3>
     <p class="text-xs text-muted">Fetched once on connect so the pedal is not flooded. When the names are in, the Editor opens automatically.</p>
     <div class="mb-2.5 flex flex-wrap items-center gap-2">
-      <button class="btn btn-primary" disabled={!$app.connected || catalog.busy} on:click={() => ctx.refreshCatalog('all')}>{catalog.busy ? 'Fetching…' : 'Fetch all'}</button>
-      <button class="btn" disabled={!$app.connected || catalog.busy} on:click={() => ctx.refreshCatalog('presets')}>Preset names</button>
-      <button class="btn" disabled={!$app.connected || catalog.busy} on:click={() => ctx.refreshCatalog('amp')}>Amp names</button>
-      <button class="btn" disabled={!$app.connected || catalog.busy} on:click={() => ctx.refreshCatalog('ir')}>Cab names</button>
+      <button class="btn btn-primary" disabled={!$uiView.connected || catalog.busy} on:click={() => ctx.refreshCatalog('all')}>{catalog.busy ? 'Fetching…' : 'Fetch all'}</button>
+      <button class="btn" disabled={!$uiView.connected || catalog.busy} on:click={() => ctx.refreshCatalog('presets')}>Preset names</button>
+      <button class="btn" disabled={!$uiView.connected || catalog.busy} on:click={() => ctx.refreshCatalog('amp')}>Amp names</button>
+      <button class="btn" disabled={!$uiView.connected || catalog.busy} on:click={() => ctx.refreshCatalog('ir')}>Cab names</button>
     </div>
     <p class="text-xs text-muted">Presets: <b>{catalog.presets}</b> · Amp models: <b>{catalog.amp}</b> · IR models: <b>{catalog.ir}</b></p>
     <p class="text-xs text-muted">{catalog.message || 'No fetch has been run yet in this session.'}</p>
   </section>
 </div>
 
-{#if $app.connected}
+{#if $uiView.connected}
   <div class="mb-2.5 flex flex-wrap items-center gap-2" style="margin-top:14px">
     <button class="btn btn-primary" on:click={() => ctx.setMode('editor')}>Continue to Editor</button>
     <button class="btn" on:click={() => ctx.setMode('live')}>Open Live view</button>
-    {#if $app.demo}<button class="btn" on:click={() => ctx.exitDemo()}>Exit demo mode</button>{/if}
+    {#if $uiView.demo}<button class="btn" on:click={() => ctx.exitDemo()}>Exit demo mode</button>{/if}
   </div>
 {/if}

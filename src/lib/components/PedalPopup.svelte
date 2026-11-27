@@ -2,7 +2,7 @@
   // Right-click expression assignment popup. One pedal drives one parameter
   // per preset; pedals occupied by global preset volume are unavailable.
   import { onDestroy, onMount } from 'svelte';
-  import { app, ctx as engineCtx } from '../engine.js';
+  import { stateView, snapshotView, feedbackView, uiView, ctx as engineCtx } from '../engine.js';
   import { BLOCK_BY_ID } from '../../core/spec.js';
   import { expressionRawToPercent, expressionPercentToRaw } from '../../core/live.js';
   import { createDaisyDualRange } from 'daisy-dual-range';
@@ -26,12 +26,12 @@
   let pedalRange;
   let paramRange;
 
-  $: preset = $app.state?.activePreset ?? 1;
-  $: assignments = ($app.state, ctx.assignments);
+  $: preset = $stateView?.activePreset ?? 1;
+  $: assignments = ($stateView, ctx.assignments);
   $: ownerKey = `${target?.block}:${target?.tempo ? 'tempo' : target?.paramIndex}`;
   $: mapping = assignments?.paramPedals?.[ownerKey] ?? null;
-  $: pedals = $app.state?.globals?.expressionPedals ?? [];
-  $: globalVolumeId = $app.state?.globals?.volumePedal ?? null;
+  $: pedals = $stateView?.globals?.expressionPedals ?? [];
+  $: globalVolumeId = $stateView?.globals?.volumePedal ?? null;
   $: chosen = pedals.find((entry) => entry.id === pedal);
   $: message = trigger ?? chosen?.trigger ?? { type: 'cc', channel: 1, number: 7 };
 

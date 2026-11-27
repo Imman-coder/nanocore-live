@@ -1,10 +1,10 @@
 <script>
-  import { app, ctx } from '../engine.js';
+  import { stateView, snapshotView, feedbackView, uiView, ctx } from '../engine.js';
   import { createDefaultState, exportState, importState, normalizeState, USER_SCENE_KEYS } from '../../core/store.js';
   import { FIRMWARE_OPTIONS, FIRMWARE_LABELS } from '../../core/versions.js';
 
   const defaults = createDefaultState().globals;
-  let globals = structuredClone($app.state?.globals ?? defaults);
+  let globals = structuredClone($stateView?.globals ?? defaults);
   if (!globals.footswitches?.length) globals.footswitches = structuredClone(defaults.footswitches);
   if (!globals.expressionPedals?.length) globals.expressionPedals = structuredClone(defaults.expressionPedals);
   if (!globals.sceneSwitches?.length) globals.sceneSwitches = structuredClone(defaults.sceneSwitches);

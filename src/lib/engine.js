@@ -1,27 +1,26 @@
 // App shell: state, transports, routing glue and view switching.
-import { BLOCK_BY_ID, BLOCKS, FX2_SPECIAL_TYPES, SNAPSHOT_BLOCKS } from '../core/spec.js';
+import { BLOCK_BY_ID, FX2_SPECIAL_TYPES, SNAPSHOT_BLOCKS } from '../core/spec.js';
 import {
-  loadState, saveState, createDefaultState, setActivePreset, updatePreset,
-  upsertStomp, assignmentsFor, effectiveStompLabel, setScene, setSceneEnabled,
-  setBlockStomp, setParamPedal, pedalOwner, setExpressionTrigger, USER_SCENE_KEYS, renameScene, setSceneBlock, setBase, setTempoSync, setLiveLayout, setLiveGrid, setPresetNames, isPresetEdited, markPresetEdited,
+  loadState, saveState, setActivePreset, updatePreset,
+  upsertStomp, assignmentsFor, effectiveStompLabel,
+  setBlockStomp, setParamPedal, pedalOwner, setExpressionTrigger, USER_SCENE_KEYS, renameScene, setSceneBlock, setTempoSync, setLiveLayout, setLiveGrid, isPresetEdited, markPresetEdited,
 } from '../core/store.js';
 import { createRouter, describeTrigger } from '../core/router.js';
 import { createMidiScheduler } from '../core/scheduler.js';
-import { buildCc, buildRequestSysEx, parseSysEx, ResponseAssembler, COMMAND, FIELD, cleanPresetName } from '../core/messages.js';
-import { parseSnapshot } from '../core/snapshot.js';
-import { COMMAND as CAT, parsePresetCatalog, parseStorageInfo, parseSlotInfo, parseGlobalSettings, activeSlotFor } from '../core/catalog.js';
+import { buildCc, buildRequestSysEx, ResponseAssembler, COMMAND, FIELD, cleanPresetName } from '../core/messages.js';
 import { resolveFirmware, typesFor } from '../core/versions.js';
 import { stompActive, toggleCc, sceneStored, sceneBlockParticipates } from '../core/live.js';
-import { captureBase } from '../core/base.js';
-import { connectionHint } from '../core/capabilities.js';
 import { tapBpm, delayMs, normalizedForMs } from '../core/tempo.js';
+import { connectionHint } from '../core/capabilities.js';
 import { createDispatcher, selectExpressionValue, selectTempoSync } from '../engine/index.js';
 import { buildParameterWrite } from '../core/parameterWrite.js';
-import { writable } from 'svelte/store';
-import { sandboxState, uiStateOf, withUiState, createMemoryStorage } from '../core/demoData.js';
-import { createWebMidiTransport } from '../transports/webmidi.js';
-import { createWebBluetoothTransport } from '../transports/webbluetooth.js';
-import { createDemoTransport } from '../transports/demo.js';
+import {
+  publishState, publishSnapshot, publishFeedback, publishUi, publishLog, publishToast, publishAll,
+} from './gateway/viewmodel.js';
+import { createDeviceGateway } from './gateway/device.js';
+import { createConnectionGateway } from './gateway/connection.js';
+export { app, stateView, snapshotView, feedbackView, uiView } from './gateway/viewmodel.js';
+import { createMemoryStorage } from '../core/demoData.js';
 
 const capabilities = {
   secure: Boolean(window.isSecureContext),
@@ -57,6 +56,46 @@ const catalogState = { busy: false, message: '', presets: 0, amp: 0, ir: 0 };
 let transportBeforeDemo = null;
 let tempoTaps = [];
 let dispatcher = null;
+let device = null;
+let connection = null;
+
+// Shared runtime for the gateway modules. Getters keep the existing local
+// variables authoritative while those modules stay independent of each other.
+const rt = {
+  get state() { return state; }, set state(value) { state = value; },
+  get snapshot() { return snapshot; }, set snapshot(value) { snapshot = value; },
+  get names() { return names; },
+  get catalog() { return catalogState; },
+  get transport() { return transport; }, set transport(value) { transport = value; },
+  get controllerTransport() { return controllerTransport; }, set controllerTransport(value) { controllerTransport = value; },
+  get sequence() { return sequence; }, set sequence(value) { sequence = value; },
+  pending,
+  assembler,
+  get lastReply() { return lastReply; }, set lastReply(value) { lastReply = value; },
+  get lastSnapshotPreset() { return lastSnapshotPreset; }, set lastSnapshotPreset(value) { lastSnapshotPreset = value; },
+  localEnabled,
+  get demoState() { return demoState; }, set demoState(value) { demoState = value; },
+  get demoUseRealData() { return demoUseRealData; }, set demoUseRealData(value) { demoUseRealData = value; },
+  get demoRequested() { return demoRequested; }, set demoRequested(value) { demoRequested = value; },
+  get transportBeforeDemo() { return transportBeforeDemo; }, set transportBeforeDemo(value) { transportBeforeDemo = value; },
+  mainStorage, demoStorage, capabilities,
+  get router() { return router; },
+  get ctx() { return ctx; },
+  get scheduler() { return scheduler; },
+  get routerGlobals() { return routerGlobals; },
+  get device() { return device; },
+  loadState, saveState,
+  finishSetup: () => finishSetup(),
+  saveWorkingState: () => saveWorkingState(),
+  persist: () => persist(),
+  update: (patch) => update(patch),
+  render: () => render(),
+  setStatus: (text, online = false) => setStatus(text, online),
+  log: (message) => log(message),
+  notify: (message) => notify(message),
+  isDemo: () => isDemo(),
+  currentAssignments: () => currentAssignments(),
+};
 
 const currentAssignments = () => assignmentsFor(state, state.activePreset);
 
@@ -64,43 +103,44 @@ const currentAssignments = () => assignmentsFor(state, state.activePreset);
 // the previous app shell; only DOM rendering was replaced by this store.
 let statusTextValue = 'Disconnected';
 let toastMessage = null;
-const expressionValues = {};
 let toastTimer = null;
-export const app = writable({});
 
 function emit() {
-  app.set({
+  publishAll({
     state,
     snapshot,
-    names: { ...names },
-    catalog: { ...catalogState },
-    status: statusTextValue,
-    connected: Boolean(transport),
-    demo: isDemo(),
-    demoUseRealData,
-    transportKind: isDemo() || demoRequested ? 'demo' : (state.globals.transportKind ?? 'webmidi'),
-    lastReply,
-    ports: controllerTransport?.listPorts() ?? { inputs: [], outputs: [] },
-    devicePorts: transport?.listPorts() ?? { inputs: [], outputs: [] },
-    capabilities: { ...capabilities },
-    firmware: resolveFirmware(state),
-    logLines: [...logLines],
-    toast: toastMessage,
-    expressionValues: { ...expressionValues },
+    names,
+    catalog: catalogState,
+    ui: {
+      status: statusTextValue,
+      connected: Boolean(transport),
+      demo: isDemo(),
+      demoUseRealData,
+      transportKind: isDemo() || demoRequested ? 'demo' : (state.globals.transportKind ?? 'webmidi'),
+      lastReply,
+      ports: controllerTransport?.listPorts() ?? { inputs: [], outputs: [] },
+      devicePorts: transport?.listPorts() ?? { inputs: [], outputs: [] },
+      capabilities: { ...capabilities },
+      firmware: resolveFirmware(state),
+      logLines,
+      toast: toastMessage,
+    },
   });
 }
+
+function render() { emit(); }
 
 function log(message) {
   logLines.push(message);
   if (logLines.length > 200) logLines.shift();
-  emit();
+  publishLog(logLines);
 }
 
 function notify(message) {
   toastMessage = message;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { toastMessage = null; emit(); }, 2600);
-  emit();
+  publishToast(message);
+  toastTimer = setTimeout(() => { toastMessage = null; publishToast(null); }, 2600);
 }
 
 function syncDelays() {
@@ -126,52 +166,15 @@ function syncDelays() {
 
 function setStatus(text, online = false) {
   statusTextValue = text;
-  emit();
+  publishUi({ status: text, connected: online });
 }
 
-function isDemo() { return transport?.kind === 'demo'; }
-
-// Sandboxed demo data lives in memory; only the explicit opt-in writes to the
-// browser's real storage. Every save in the app funnels through here.
-function workingStorage() { return isDemo() && !demoUseRealData ? demoStorage : mainStorage; }
-function saveWorkingState() { saveState(workingStorage(), state); }
-
-function enterDemoData() {
-  demoState = sandboxState(state);
-  state = demoState;
-  demoUseRealData = false;
-  demoRequested = false;
-  Object.assign(routerGlobals, state.globals);
-}
-
-function adoptMainState() {
-  const ui = uiStateOf(state);
-  const real = loadState(mainStorage);
-  // If the opt-in wrote a demo transport choice, undo it on the way out.
-  if (real.globals?.transportKind === 'demo' && transportBeforeDemo) {
-    real.globals.transportKind = transportBeforeDemo;
-    saveState(mainStorage, real);
-  }
-  state = withUiState(real, ui);
-  Object.assign(routerGlobals, state.globals);
-  demoState = null;
-  demoUseRealData = false;
-  demoRequested = false;
-  transportBeforeDemo = null;
-}
-
-function setDemoUseRealData(enabled) {
-  if (!isDemo() || Boolean(enabled) === demoUseRealData) return;
-  const ui = uiStateOf(state);
-  const real = loadState(mainStorage);
-  state = withUiState(real, ui);
-  demoUseRealData = Boolean(enabled);
-  persist();
-  notify(demoUseRealData
-    ? 'Demo now uses your saved data — edits will persist in this browser'
-    : 'Demo is sandboxed again — saved settings are untouched');
-  render();
-}
+function isDemo() { return connection.isDemo(); }
+function workingStorage() { return connection.workingStorage(); }
+function saveWorkingState() { connection.saveWorkingState(); }
+function enterDemoData() { connection.enterDemoData(); }
+function adoptMainState() { connection.adoptMainState(); }
+function setDemoUseRealData(enabled) { connection.setDemoUseRealData(enabled); }
 
 // One scheduler for every write to the pedal: 25 ms spacing plus coalescing
 // of rapid sweeps of the same control to the last value in the window.
@@ -186,151 +189,48 @@ const scheduler = createMidiScheduler({
   coalesceMs: MIDI_GAP_MS,
 });
 
-function send(bytes, key) {
-  // The simulator does not need hardware pacing: skipping the output queue
-  // keeps catalog reads instant even when the browser throttles background tabs.
-  if (isDemo()) {
-    try {
-      if (!transport) throw new Error('Demo pedal is not running');
-      transport.send(bytes);
-      return Promise.resolve(1);
-    } catch (error) {
-      return Promise.reject(error);
-    }
-  }
-  return scheduler.send(bytes, key);
-}
+device = createDeviceGateway(rt);
+connection = createConnectionGateway(rt);
 
-function sendRequest(command, payload = [], timeout = 3000) {
-  const seq = sequence++ & 0xff;
-  const bytes = buildRequestSysEx(command, payload, seq);
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      pending.delete(pendingKey(seq, command));
-      reject(new Error(`No reply to opcode 0x${command.toString(16)} (last device reply: ${lastReply ?? 'none'})`));
-    }, timeout);
-    pending.set(pendingKey(seq, command), { resolve, reject, timer });
-    Promise.resolve(send(bytes)).catch((error) => {
-      clearTimeout(timer);
-      pending.delete(pendingKey(seq, command));
-      reject(error);
-    });
-  });
-}
+function send(bytes, key) { return device.send(bytes, key); }
+function sendRequest(command, payload = [], timeout = 3000) { return device.sendRequest(command, payload, timeout); }
+function settle(sequence, command, frame, error) { return device.settle(sequence, command, frame, error); }
 
-function settle(sequence, command, frame, error) {
-  const key = pendingKey(sequence, command);
-  const waiter = pending.get(key);
-  if (!waiter) return;
-  pending.delete(key);
-  clearTimeout(waiter.timer);
-  if (error) waiter.reject(error); else waiter.resolve(frame);
-}
-
-function syncPresetFromDevice() {
-  if (!snapshot) return;
-  const visible = snapshot.activePreset + 1;
-  if (state.activePreset !== visible) {
-    state = setActivePreset(state, visible);
-    saveWorkingState();
-  }
-}
-
-function applySnapshot(parsed) {
-  const presetChanged = lastSnapshotPreset !== null && lastSnapshotPreset !== parsed.activePreset;
-  lastSnapshotPreset = parsed.activePreset;
-  snapshot = parsed;
-  // Base is saved in browser storage like the other scenes. On the first sync
-  // of a preset, capture the pedal values as its initial Base.
-  const basePreset = parsed.activePreset + 1;
-  if (!Object.keys(assignmentsFor(state, basePreset).base?.values ?? {}).length) {
-    const captured = captureBase(parsed.blocks);
-    state = setBase(state, basePreset, captured.values, captured.enabled);
-    persist();
-  }
-  // A snapshot read right after a stomp can still report the old on/off state.
-  // Keep locally confirmed changes authoritative briefly so scenes store what
-  // the user actually selected.
-  const now = Date.now();
-  for (const block of snapshot.blocks) {
-    const override = localEnabled.get(block.id);
-    if (!override) continue;
-    if (now - override.at < 3000) block.enabled = override.on;
-    else localEnabled.delete(block.id);
-  }
-  syncPresetFromDevice();
-  for (const block of snapshot.blocks) router.setBlockState(block.id, block.enabled);
-  render();
-  if (presetChanged) refreshActiveAssets();
-}
-
-async function refreshActiveAssets() {
-  for (const kind of ['amp', 'ir']) {
-    const blockId = kind === 'amp' ? 'amp' : 'cab';
-    let active = null;
-    try {
-      const command = kind === 'amp' ? CAT.AMP_INFO : CAT.IR_INFO;
-      active = parseStorageInfo((await sendRequest(command, [], 3000)).payload).activeSlot;
-    } catch (error) {
-      log(`${kind} active slot: ${error.message}`);
-      active = snapshot?.blocks.find((b) => b.id === blockId)?.variant ?? null;
-    }
-    if (Array.isArray(names[kind]) && Number.isInteger(active) && active >= 0 && active < names[kind].length) {
-      names[`${kind}Active`] = active;
-    }
-  }
-  render();
-}
-
-function handleDeviceMessage(message) {
-  const raw = parseSysEx(message.bytes);
-  if (!raw || raw.direction !== 0x71) {
-    log(`← ignored: ${[...message.bytes].slice(0, 8).map((b) => b.toString(16)).join(' ')}`);
-    return;
-  }
-  log('← ' + [...message.bytes].map((b) => b.toString(16).padStart(2, '0')).join(' '));
-  lastReply = `opcode 0x${raw.command.toString(16)} status 0x${raw.status.toString(16)} seq ${raw.sequence}`;
-  let frame;
-  try {
-    frame = assembler.feed(raw);
-  } catch (error) {
-    log(`streamed reply: ${error.message}`);
-    settle(raw.sequence, raw.command, null, error);
-    return;
-  }
-  if (!frame) return;
-  if (frame.status !== 0) {
-    log(`device error: opcode 0x${frame.command.toString(16)} status 0x${frame.status.toString(16)}`);
-    settle(frame.sequence, frame.command, null, new Error(`Device returned status 0x${frame.status.toString(16)}`));
-    return;
-  }
-  settle(frame.sequence, frame.command, frame);
-  if (frame.command === COMMAND.GET_SNAPSHOT) {
-    try { applySnapshot(parseSnapshot(frame.payload)); }
-    catch (error) { log(`snapshot: ${error.message}`); }
-  }
-}
+function syncPresetFromDevice() { return device.syncPresetFromDevice(); }
+function applySnapshot(parsed) { return device.applySnapshot(parsed); }
+function refreshActiveAssets() { return device.refreshActiveAssets(); }
+function handleDeviceMessage(message) { return device.handleDeviceMessage(message); }
+function readSnapshot() { return device.readSnapshot(); }
+function presetLabel(number) { return device.presetLabel(number); }
+function loadPresetNames() { return device.loadPresetNames(); }
+function loadAssetNames(kind) { return device.loadAssetNames(kind); }
+function refreshAssetNames(kind) { return device.refreshAssetNames(kind); }
 
 function paintExpressionFeedback(pedalId, value) {
-  expressionValues[pedalId] = value;
-  emit();
+  publishFeedback(pedalId, value);
 }
 
 function dispatch(command) {
   if (!dispatcher) return;
+  const scoped = command?.type === 'expression' || command?.type === 'writeParameter';
   if (command?.type === 'expression') {
     paintExpressionFeedback(command.binding?.id ?? command.expression, Number(command.raw ?? command.value ?? 0) || 0);
   }
   dispatcher.dispatch(command);
   persist();
-  render();
+  if (scoped) {
+    publishState(state);
+    publishSnapshot(snapshot);
+  } else {
+    render();
+  }
 }
 
 function applyVolumeFromExpression(raw) {
   const volume = Math.max(0, Math.min(100, Math.round(Number(raw) || 0)));
   if (snapshot) snapshot.volume = volume;
   send(buildRequestSysEx(COMMAND.SET_FIELD, [FIELD.VOLUME, volume]), `expression-volume:${state.globals.volumePedal ?? 'none'}`);
-  render();
+  publishSnapshot(snapshot);
 }
 
 const router = createRouter({
@@ -380,299 +280,15 @@ function markEditedNoRender(preset = state.activePreset) {
   saveWorkingState();
 }
 
-async function readSnapshot() {
-  let lastError = null;
-  for (let attempt = 1; attempt <= 3; attempt++) {
-    try {
-      const reply = await sendRequest(COMMAND.GET_SNAPSHOT, []);
-      applySnapshot(parseSnapshot(reply.payload));
-      notify(attempt > 1 ? `Snapshot read on attempt ${attempt}` : `Snapshot read: preset ${snapshot.activePreset + 1}`);
-      return snapshot;
-    } catch (error) {
-      lastError = error;
-      log(`snapshot attempt ${attempt}: ${error.message}`);
-      if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, 250 * attempt));
-    }
-  }
-  notify(`Could not read parameters: ${lastError?.message ?? 'unknown error'}`);
-  return null;
-}
-
-function presetLabel(number) {
-  return assignmentsFor(state, number).name || `Preset ${number}`;
-}
-
-async function loadPresetNames() {
-  const found = new Map();
-  for (let start = 0; start < 64; start += 6) {
-    try {
-      const reply = await sendRequest(CAT.PRESET_CATALOG, [start, 6]);
-      const entries = parsePresetCatalog(reply.payload);
-      entries.forEach((entry) => found.set(entry.slot, entry.name));
-      if (entries.length < 6) break;
-    } catch (error) {
-      log(`preset catalog at ${start}: ${error.message}`);
-      break;
-    }
-  }
-  state = setPresetNames(state, found);
-  saveWorkingState();
-  catalogState.presets = found.size;
-  render();
-}
-
-async function loadAssetNames(kind) {
-  if (names[kind]) return names[kind];
-  const infoCommand = kind === 'amp' ? CAT.AMP_INFO : CAT.IR_INFO;
-  const slotCommand = kind === 'amp' ? CAT.AMP_SLOT_INFO : CAT.IR_SLOT_INFO;
-  const blockId = kind === 'amp' ? 'amp' : 'cab';
-  let slotCount = kind === 'amp' ? 38 : 30;
-  let storageActive = null;
-  const snapshotVariant = snapshot?.blocks.find((b) => b.id === blockId)?.variant ?? null;
-
-  try {
-    const info = parseStorageInfo((await sendRequest(infoCommand, [], 3000)).payload);
-    slotCount = info.slotCount;
-    // The user-facing amp selector has 30 models; higher slots are drive/fuzz
-    // models and are not part of that list.
-    if (kind === 'amp') slotCount = Math.min(slotCount, 30);
-    storageActive = info.activeSlot;
-  } catch (error) {
-    log(`${kind} info: ${error.message} (using defaults)`);
-  }
-
-  // Storage info is authoritative; the snapshot variant is only a fallback.
-  const activeSlot = activeSlotFor(storageActive, snapshotVariant, slotCount);
-  names[`${kind}Active`] = activeSlot;
-
-  // Publish the array immediately so the active slot's real name can appear
-  // even if the remaining slot reads are still in flight.
-  const list = new Array(slotCount).fill(null);
-  names[kind] = list;
-  let lastSlotError = null;
-  let failuresLogged = 0;
-
-  async function readSlot(slot) {
-    for (let attempt = 0; attempt < 3; attempt++) {
-      try {
-        const reply = await sendRequest(slotCommand, [slot], 1500);
-        return parseSlotInfo(reply.payload, slot).name || null;
-      } catch (error) {
-        lastSlotError = error.message;
-      }
-    }
-    return null;
-  }
-
-  const first = activeSlot ?? 0;
-  list[first] = (await readSlot(first)) ?? `Slot ${first}`;
-  render();
-
-  for (let slot = 0; slot < slotCount; slot++) {
-    if (slot === first) continue;
-    list[slot] = (await readSlot(slot)) ?? `Slot ${slot}`;
-    if (list[slot].startsWith('Slot ') && failuresLogged < 3) {
-      log(`${kind} slot ${slot}: ${lastSlotError ?? 'empty name'}`);
-      failuresLogged++;
-    }
-    render();
-  }
-  catalogState[kind] = list.filter(Boolean).length;
-  render();
-  return list;
-}
-
-function refreshAssetNames(kind) {
-  names[kind] = null;
-  return loadAssetNames(kind);
-}
-
-function applyPortSelection() {
-  const selection = state.globals.portSelection;
-  if (selection && typeof controllerTransport?.setSelection === 'function') {
-    controllerTransport.setSelection(selection);
-  }
-}
-
-function finishSetup() {
-  if (state.mode !== 'start' || !transport) return;
-  update({ mode: 'editor' });
-  notify('Setup complete — Editor is ready');
-}
-
-function autoFetchCatalog() {
-  catalogState.busy = true;
-  catalogState.message = 'Fetching names from the pedal…';
-  render();
-  (async () => {
-    try {
-      const settings = parseGlobalSettings((await sendRequest(COMMAND.GET_GLOBALS, [])).payload);
-      if (state.globals.settingsLayout !== settings.layout) {
-        state = { ...state, globals: { ...state.globals, settingsLayout: settings.layout } };
-        persist();
-      }
-      log(`device settings layout ${settings.layout}`);
-    } catch (error) { log(`global settings: ${error.message}`); }
-    await loadPresetNames();
-    await loadAssetNames('amp');
-    await loadAssetNames('ir');
-    catalogState.message = `Fetched ${catalogState.presets} presets, ${catalogState.amp} amps, ${catalogState.ir} IRs`;
-    finishSetup();
-  })().catch((error) => {
-    catalogState.message = `Fetch failed: ${error.message}`;
-    log(`names: ${error.message}`);
-  }).finally(() => {
-    catalogState.busy = false;
-    render();
-  });
-}
-
-function updateCapabilityHint() { /* capability text is rendered by Settings */ }
-
-function setTransportKind(kind) {
-  if (!['webmidi', 'webbluetooth', 'demo'].includes(kind)) return;
-  // Selecting demo but not connecting yet must not touch saved data.
-  if (kind === 'demo' && !isDemo()) {
-    if (!transportBeforeDemo) {
-      transportBeforeDemo = state.globals.transportKind && state.globals.transportKind !== 'demo'
-        ? state.globals.transportKind : 'webmidi';
-    }
-    demoRequested = true;
-    updateCapabilityHint();
-    notify('Demo mode selected — press Connect or Try demo mode');
-    render();
-    return;
-  }
-  if (kind !== 'demo' && !isDemo()) {
-    demoRequested = false;
-    transportBeforeDemo = null;
-  }
-  update({ globals: { ...state.globals, transportKind: kind } });
-  updateCapabilityHint();
-  if (kind !== 'demo') notify(`Transport set to ${kind === 'webbluetooth' ? 'direct Bluetooth' : 'Web MIDI'}`);
-}
-
-function disconnect() {
-  const wasDemo = isDemo();
-  transport?.disconnect();
-  controllerTransport?.disconnect();
-  transport = null;
-  controllerTransport = null;
-  // Leaving demo always returns to the browser's saved data. With the opt-in
-  // off, none of the sandbox edits ever reached it.
-  if (wasDemo) adoptMainState();
-  setStatus('Disconnected', false);
-  names.amp = null;
-  names.ir = null;
-  names.ampActive = null;
-  names.irActive = null;
-  catalogState.presets = 0;
-  catalogState.amp = 0;
-  catalogState.ir = 0;
-  catalogState.message = wasDemo
-    ? 'Demo mode closed — no pedal was written to.'
-    : 'Disconnected — nothing fetched in this session.';
-  render();
-  notify(wasDemo ? 'Demo mode closed' : 'Disconnected from the NANOCORE');
-}
-
-function exitDemo() {
-  if (!isDemo()) return;
-  disconnect();
-  update({ mode: 'start' });
-  notify('Back at Start — connect a pedal whenever you are ready');
-}
-
-async function refreshCatalog(which = 'all') {
-  if (catalogState.busy) return notify('A name fetch is already running');
-  if (!transport) throw new Error('Connect to the NANOCORE first');
-  catalogState.busy = true;
-  catalogState.message = `Fetching ${which === 'all' ? 'all names' : which}…`;
-  render();
-  try {
-    if (which === 'all' || which === 'presets') await loadPresetNames();
-    if (which === 'all' || which === 'amp') await refreshAssetNames('amp');
-    if (which === 'all' || which === 'ir') await refreshAssetNames('ir');
-    catalogState.message = `Fetched ${catalogState.presets} presets, ${catalogState.amp} amps, ${catalogState.ir} IRs`;
-    notify(catalogState.message);
-    finishSetup();
-  } catch (error) {
-    catalogState.message = `Fetch failed: ${error.message}`;
-    notify(catalogState.message);
-  } finally {
-    catalogState.busy = false;
-    render();
-  }
-}
-
-async function scanPorts() {
-  if ((state.globals.transportKind ?? 'webmidi') === 'webbluetooth') {
-    notify('Direct Bluetooth ports appear only after connecting');
-    return;
-  }
-  if (controllerTransport?.kind !== 'webmidi') controllerTransport = createWebMidiTransport();
-  await controllerTransport.scan();
-  applyPortSelection();
-  render();
-  notify('MIDI devices listed — choose ports, then Connect');
-}
-
-async function connect(forcedKind) {
-  const kind = forcedKind ?? (demoRequested ? 'demo' : state.globals.transportKind ?? 'webmidi');
-  if (isDemo() && kind !== 'demo') adoptMainState();
-  if (kind === 'demo' && !isDemo()) {
-    if (!transportBeforeDemo) {
-      transportBeforeDemo = state.globals.transportKind && state.globals.transportKind !== 'demo'
-        ? state.globals.transportKind : 'webmidi';
-    }
-    // Copy the saved data first: sandbox edits must never reach mainStorage.
-    enterDemoData();
-  } else if (kind !== 'demo') {
-    transportBeforeDemo = null;
-  }
-  const reuseScannedWebMidi = kind === 'webmidi' && controllerTransport?.kind === 'webmidi' && !controllerTransport.connected;
-  try {
-    transport?.disconnect();
-    if (!reuseScannedWebMidi) controllerTransport?.disconnect();
-    names.amp = null;
-    names.ir = null;
-    names.ampActive = null;
-    names.irActive = null;
-    if (kind === 'demo') {
-      transport = createDemoTransport();
-      controllerTransport = transport;
-    } else if (kind === 'webbluetooth') {
-      transport = createWebBluetoothTransport();
-      controllerTransport = createWebMidiTransport();
-      try { await controllerTransport.connect(); } catch (error) { log(`controllers: ${error.message}`); }
-    } else {
-      transport = controllerTransport?.kind === 'webmidi' ? controllerTransport : createWebMidiTransport();
-      controllerTransport = transport;
-    }
-    await transport.connect();
-    transport.onDeviceMessage(handleDeviceMessage);
-    controllerTransport.onControllerMessage((m) => router.handleMidi(m));
-    transport.onStateChange(() => render());
-    if (controllerTransport !== transport) controllerTransport.onStateChange(() => render());
-    applyPortSelection();
-    setStatus(kind === 'demo' ? 'Demo mode (no pedal)' : `Connected (${transport.kind})`, true);
-    setTransportKind(kind);
-    log(kind === 'demo' ? 'demo pedal started (no hardware involved)' : `connected via ${transport.kind}`);
-    if (kind === 'demo') notify('Demo mode — a simulated NANOCORE is ready');
-    render();
-    await readSnapshot();
-    autoFetchCatalog();
-  } catch (error) {
-    setStatus('Connection failed', false);
-    if (/Web MIDI is not available/.test(error.message)) {
-      notify(connectionHint(capabilities));
-    } else {
-      notify(error.message);
-    }
-    updateCapabilityHint();
-    log(`connect: ${error.message}`);
-  }
-}
+function applyPortSelection() { return connection.applyPortSelection(); }
+function finishSetup() { return connection.finishSetup(); }
+function autoFetchCatalog() { return connection.autoFetchCatalog(); }
+function setTransportKind(kind) { return connection.setTransportKind(kind); }
+function disconnect() { return connection.disconnect(); }
+function exitDemo() { return connection.exitDemo(); }
+function refreshCatalog(which = 'all') { return connection.refreshCatalog(which); }
+function scanPorts() { return connection.scanPorts(); }
+function connect(forcedKind) { return connection.connect(forcedKind); }
 
 export const ctx = {
   get state() { return state; },
@@ -1085,11 +701,6 @@ dispatcher = createDispatcher({
 
 window.__nanocoreCtx = ctx;
 window.__nanocoreConnect = connect;
-window.__nanocoreClearLog = () => { logLines.length = 0; emit(); };
-
-
-function render() {
-  emit();
-}
+window.__nanocoreClearLog = () => { logLines.length = 0; publishLog(logLines); };
 
 emit();

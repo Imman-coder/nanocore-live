@@ -1,5 +1,5 @@
 <script>
-  import { app, ctx } from '../engine.js';
+  import { stateView, snapshotView, feedbackView, uiView, ctx } from '../engine.js';
   import GlobalsTab from './GlobalsTab.svelte';
   import DevicesTab from './DevicesTab.svelte';
 
@@ -18,8 +18,8 @@
   let globalsTab;
   let devicesScanned = false;
 
-  $: if (open && tab === 'devices' && !devicesScanned && !$app.connected
-      && ($app.state.globals.transportKind ?? 'webmidi') !== 'webbluetooth' && ctx.scanPorts) {
+  $: if (open && tab === 'devices' && !devicesScanned && !$uiView.connected
+      && ($stateView.globals.transportKind ?? 'webmidi') !== 'webbluetooth' && ctx.scanPorts) {
     devicesScanned = true;
     Promise.resolve(ctx.scanPorts()).catch(() => { devicesScanned = false; });
   }
@@ -34,7 +34,7 @@
 
   function demoMode() {
     onClose();
-    if ($app.demo) ctx.exitDemo();
+    if ($uiView.demo) ctx.exitDemo();
     else ctx.connect('demo');
   }
 
@@ -70,33 +70,33 @@
           <GlobalsTab bind:this={globalsTab} />
         {:else}
           <div class="flex flex-wrap items-center gap-2">
-            <button id="connect" class="btn" on:click={() => ($app.connected ? ctx.disconnect() : ctx.connect())}>{$app.connected ? 'Disconnect' : 'Connect'}</button>
-            <span id="status" class="badge badge-outline badge-sm {$app.connected ? 'badge-success' : 'badge-error'}">{$app.status}</span>
+            <button id="connect" class="btn" on:click={() => ($uiView.connected ? ctx.disconnect() : ctx.connect())}>{$uiView.connected ? 'Disconnect' : 'Connect'}</button>
+            <span id="status" class="badge badge-outline badge-sm {$uiView.connected ? 'badge-success' : 'badge-error'}">{$uiView.status}</span>
           </div>
           <button data-action="demo-mode"
-            class="btn {!$app.demo ? 'btn-primary' : ''}"
-            on:click={demoMode}>{$app.demo ? 'Exit demo mode' : 'Start demo mode (no pedal)'}</button>
-          <p class="text-xs text-muted">{$app.demo ? 'A simulated pedal is running locally. No MIDI messages leave this browser.' : 'Demo mode loads example presets and names so the Editor and Live views can be explored without hardware.'}</p>
-          {#if $app.demo}
-            <label class="mb-2.5 flex flex-wrap items-center gap-2 rounded-lg border border-accent-2 px-2.5 py-2 text-xs text-muted"><input class="checkbox checkbox-sm checkbox-primary" type="checkbox" data-setting="demo-use-real-data" checked={$app.demoUseRealData} on:change={(event) => ctx.setDemoUseRealData(event.currentTarget.checked)} /> Use my actual saved settings and data in demo (edits will change what this browser stores)</label>
-            <p class="text-xs text-muted">{$app.demoUseRealData ? 'Demo is using your real saved data — changes persist in this browser.' : 'Demo edits are sandboxed: settings, assignments and layouts you change here are discarded when you exit.'}</p>
+            class="btn {!$uiView.demo ? 'btn-primary' : ''}"
+            on:click={demoMode}>{$uiView.demo ? 'Exit demo mode' : 'Start demo mode (no pedal)'}</button>
+          <p class="text-xs text-muted">{$uiView.demo ? 'A simulated pedal is running locally. No MIDI messages leave this browser.' : 'Demo mode loads example presets and names so the Editor and Live views can be explored without hardware.'}</p>
+          {#if $uiView.demo}
+            <label class="mb-2.5 flex flex-wrap items-center gap-2 rounded-lg border border-accent-2 px-2.5 py-2 text-xs text-muted"><input class="checkbox checkbox-sm checkbox-primary" type="checkbox" data-setting="demo-use-real-data" checked={$uiView.demoUseRealData} on:change={(event) => ctx.setDemoUseRealData(event.currentTarget.checked)} /> Use my actual saved settings and data in demo (edits will change what this browser stores)</label>
+            <p class="text-xs text-muted">{$uiView.demoUseRealData ? 'Demo is using your real saved data — changes persist in this browser.' : 'Demo edits are sandboxed: settings, assignments and layouts you change here are discarded when you exit.'}</p>
           {/if}
           <div class="mb-2.5 flex flex-wrap items-center gap-2">
             <label for="transport-kind" class="text-xs text-muted min-w-[90px]">Transport</label>
-            <select id="transport-kind" aria-label="Transport" value={$app.transportKind ?? 'webmidi'} class="select select-bordered select-sm" on:change={(event) => ctx.setTransportKind(event.currentTarget.value)}>
+            <select id="transport-kind" aria-label="Transport" value={$uiView.transportKind ?? 'webmidi'} class="select select-bordered select-sm" on:change={(event) => ctx.setTransportKind(event.currentTarget.value)}>
               <option value="webmidi">USB MIDI / paired Bluetooth MIDI</option>
               <option value="webbluetooth">Direct Bluetooth (Web Bluetooth)</option>
               <option value="demo">Demo mode (no pedal)</option>
             </select>
           </div>
-          <label class="mb-2.5 flex flex-wrap items-center gap-2 text-xs text-muted"><input class="checkbox checkbox-sm checkbox-primary" type="checkbox" checked={$app.state.globals.showLogBar !== false} on:change={(event) => ctx.setGlobalSetting('showLogBar', event.currentTarget.checked)} /> Show bottom MIDI message bar</label>
-          <label class="mb-2.5 flex flex-wrap items-center gap-2 text-xs text-muted"><input class="checkbox checkbox-sm checkbox-primary" type="checkbox" checked={Boolean($app.state.globals.hideAssignmentsButton)} on:change={(event) => ctx.setGlobalSetting('hideAssignmentsButton', event.currentTarget.checked)} /> Hide "Show parameter assignments" button</label>
-          <label class="mb-2.5 flex flex-wrap items-center gap-2 text-xs text-muted"><input class="checkbox checkbox-sm checkbox-primary" type="checkbox" checked={Boolean($app.state.globals.hideLivePresetLabel)} on:change={(event) => ctx.setGlobalSetting('hideLivePresetLabel', event.currentTarget.checked)} /> Hide "Live — NANOCORE preset" label</label>
-          <label class="mb-2.5 flex flex-wrap items-center gap-2 text-xs text-muted"><input class="checkbox checkbox-sm checkbox-primary" type="checkbox" checked={Boolean($app.state.globals.hideLivePresetSelector)} on:change={(event) => ctx.setGlobalSetting('hideLivePresetSelector', event.currentTarget.checked)} /> Hide preset selector in Live</label>
-          <label class="mb-2.5 flex flex-wrap items-center gap-2 text-xs text-muted"><input class="checkbox checkbox-sm checkbox-primary" type="checkbox" checked={Boolean($app.state.globals.liveLayout?.fitScreen)} on:change={(event) => ctx.setLiveLayoutOption('fitScreen', event.currentTarget.checked)} /> Fit Live board to screen (no scrolling)</label>
+          <label class="mb-2.5 flex flex-wrap items-center gap-2 text-xs text-muted"><input class="checkbox checkbox-sm checkbox-primary" type="checkbox" checked={$stateView.globals.showLogBar !== false} on:change={(event) => ctx.setGlobalSetting('showLogBar', event.currentTarget.checked)} /> Show bottom MIDI message bar</label>
+          <label class="mb-2.5 flex flex-wrap items-center gap-2 text-xs text-muted"><input class="checkbox checkbox-sm checkbox-primary" type="checkbox" checked={Boolean($stateView.globals.hideAssignmentsButton)} on:change={(event) => ctx.setGlobalSetting('hideAssignmentsButton', event.currentTarget.checked)} /> Hide "Show parameter assignments" button</label>
+          <label class="mb-2.5 flex flex-wrap items-center gap-2 text-xs text-muted"><input class="checkbox checkbox-sm checkbox-primary" type="checkbox" checked={Boolean($stateView.globals.hideLivePresetLabel)} on:change={(event) => ctx.setGlobalSetting('hideLivePresetLabel', event.currentTarget.checked)} /> Hide "Live — NANOCORE preset" label</label>
+          <label class="mb-2.5 flex flex-wrap items-center gap-2 text-xs text-muted"><input class="checkbox checkbox-sm checkbox-primary" type="checkbox" checked={Boolean($stateView.globals.hideLivePresetSelector)} on:change={(event) => ctx.setGlobalSetting('hideLivePresetSelector', event.currentTarget.checked)} /> Hide preset selector in Live</label>
+          <label class="mb-2.5 flex flex-wrap items-center gap-2 text-xs text-muted"><input class="checkbox checkbox-sm checkbox-primary" type="checkbox" checked={Boolean($stateView.globals.liveLayout?.fitScreen)} on:change={(event) => ctx.setLiveLayoutOption('fitScreen', event.currentTarget.checked)} /> Fit Live board to screen (no scrolling)</label>
           <button data-action="edit-live-layout" class="btn" on:click={editLiveLayout}>Edit Live layout</button>
           <p class="text-xs text-muted" id="capability-hint">{ctx.connectionHint()}</p>
-          <p class="text-xs text-muted">Last device reply: {$app.lastReply ?? 'none'}</p>
+          <p class="text-xs text-muted">Last device reply: {$uiView.lastReply ?? 'none'}</p>
         {/if}
       </div>
       <div class="flex flex-none justify-end gap-2 border-t border-line pt-2.5">

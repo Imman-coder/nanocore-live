@@ -1,5 +1,5 @@
 <script>
-  import { app, ctx } from './lib/engine.js';
+  import { stateView, snapshotView, feedbackView, uiView, ctx } from './lib/engine.js';
   import Start from './lib/components/Start.svelte';
   import Editor from './lib/components/Editor.svelte';
   import Live from './lib/components/Live.svelte';
@@ -7,8 +7,8 @@
 
   let settingsOpen = false;
   let settingsTab = 'connection';
-  $: mode = $app.state.mode;
-  $: tempo = $app.state.globals.tempo ?? { bpm: null, signature: '4/4' };
+  $: mode = $stateView.mode;
+  $: tempo = $stateView.globals.tempo ?? { bpm: null, signature: '4/4' };
 
   function openSettings() { settingsOpen = true; }
   function closeSettings() { settingsOpen = false; }
@@ -22,11 +22,11 @@
 <div
   class="flex h-screen flex-col"
   data-mode={mode}
-  data-demo={$app.demo}
-  data-fit={mode === 'live' && Boolean($app.state.globals.liveLayout?.fitScreen)}
+  data-demo={$uiView.demo}
+  data-fit={mode === 'live' && Boolean($stateView.globals.liveLayout?.fitScreen)}
 >
   <header class="flex flex-none items-center gap-3 border-b border-line bg-panel px-4 py-2.5 max-[900px]:flex-wrap">
-    <div class="mr-auto text-base tracking-[0.12em]">NANOCORE <b class="text-accent">LIVE</b>{#if $app.demo}<span class="badge badge-outline badge-success badge-sm ml-2">DEMO</span>{/if}</div>
+    <div class="mr-auto text-base tracking-[0.12em]">NANOCORE <b class="text-accent">LIVE</b>{#if $uiView.demo}<span class="badge badge-outline badge-success badge-sm ml-2">DEMO</span>{/if}</div>
     {#if mode !== 'start'}
       <button class="btn btn-primary" on:click={switchMode} title="Long-press in Live to arrange the board">
         {mode === 'live' ? 'Editor' : 'Live'}
@@ -34,7 +34,7 @@
     {/if}
     {#if mode !== 'start'}
       <div class="flex items-center gap-1.5">
-        <button class="btn {tempo.bpm ? 'btn-primary' : ''}" disabled={mode === 'live' && Boolean($app.state.liveEditing)} on:click={() => ctx.tapTempo()} title="Tap to set BPM">TAP</button>
+        <button class="btn {tempo.bpm ? 'btn-primary' : ''}" disabled={mode === 'live' && Boolean($stateView.liveEditing)} on:click={() => ctx.tapTempo()} title="Tap to set BPM">TAP</button>
         <span class="min-w-7 text-center font-bold text-accent">{tempo.bpm ?? '—'}</span>
         <select aria-label="Time signature" value={tempo.signature}
           class="w-[68px] select select-bordered select-sm"
@@ -45,12 +45,12 @@
         </select>
       </div>
     {/if}
-    <span class="rounded-full border px-2.5 py-1 text-xs {$app.connected ? 'border-accent-2 text-accent-2' : 'border-danger text-danger'}">{$app.status}</span>
+    <span class="rounded-full border px-2.5 py-1 text-xs {$uiView.connected ? 'border-accent-2 text-accent-2' : 'border-danger text-danger'}">{$uiView.status}</span>
     <button class="btn btn-sm" on:click={toggleFullscreen} aria-label="Toggle fullscreen">⛶</button>
     <button class="btn btn-sm" on:click={openSettings} aria-label="Open settings">⚙</button>
   </header>
 
-  <main class="flex min-h-0 flex-1 gap-3.5 overflow-auto [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:rounded-lg [&::-webkit-scrollbar-thumb]:bg-line max-[900px]:flex-col max-[900px]:p-2.5 {mode === 'live' && Boolean($app.state.globals.liveLayout?.fitScreen) ? 'overflow-hidden' : 'overflow-auto'} {mode === 'start' ? '!px-6 !py-6' : 'px-[18px] py-3.5'}">
+  <main class="flex min-h-0 flex-1 gap-3.5 overflow-auto [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:rounded-lg [&::-webkit-scrollbar-thumb]:bg-line max-[900px]:flex-col max-[900px]:p-2.5 {mode === 'live' && Boolean($stateView.globals.liveLayout?.fitScreen) ? 'overflow-hidden' : 'overflow-auto'} {mode === 'start' ? '!px-6 !py-6' : 'px-[18px] py-3.5'}">
     {#if mode === 'start'}
       <Start onOpenGlobals={() => { settingsTab = 'globals'; settingsOpen = true; }} />
     {:else if mode === 'live'}
@@ -60,16 +60,16 @@
     {/if}
   </main>
 
-  {#if $app.state.globals.showLogBar !== false}
+  {#if $stateView.globals.showLogBar !== false}
     <footer class="flex flex-none items-center gap-2.5 border-t border-line bg-panel px-3.5 py-1.5 text-[11px] text-muted">
       <span class="font-bold text-text">MIDI</span>
-      <div class="flex-1 overflow-hidden text-ellipsis whitespace-nowrap">{$app.logLines.slice(-6).join('  |  ')}</div>
+      <div class="flex-1 overflow-hidden text-ellipsis whitespace-nowrap">{$uiView.logLines.slice(-6).join('  |  ')}</div>
       <button class="btn btn-ghost btn-sm" on:click={() => window.__nanocoreClearLog?.()}>Clear</button>
     </footer>
   {/if}
 
-  {#if $app.toast}
-    <div class="fixed right-[18px] top-16 z-[70] max-w-[min(420px,80vw)] rounded-lg border border-accent bg-[#2b2418] px-3.5 py-2 text-[13px] text-text">{$app.toast}</div>
+  {#if $uiView.toast}
+    <div class="fixed right-[18px] top-16 z-[70] max-w-[min(420px,80vw)] rounded-lg border border-accent bg-[#2b2418] px-3.5 py-2 text-[13px] text-text">{$uiView.toast}</div>
   {/if}
 
   <Settings open={settingsOpen} tab={settingsTab} onClose={closeSettings}
