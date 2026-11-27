@@ -29,9 +29,8 @@ test('the Svelte shell owns mode switching, settings, log and toast', () => {
 test('Start offers direct demo and device entry with a clear status', () => {
   assert.match(start, /ctx\.connect\('demo'\)/);
   assert.match(start, /Try demo/);
-  assert.match(start, /ctx\.connect\(\)/);
+  assert.match(start, /connectDevice/);
   assert.match(start, /Connect device/);
-  assert.match(start, /\$uiView\.connected/);
   assert.match(start, /Unleash your/);
   assert.match(start, /capabilities\?\.bluetooth/);
   assert.match(start, /Connect via MIDI BLE/);

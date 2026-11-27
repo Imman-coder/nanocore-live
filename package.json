@@ -9,7 +9,9 @@
     "preview": "vite preview",
     "start": "node server.js",
     "test": "node --test tests/*.test.js",
-    "test:characterization": "node --test tests/characterization.test.js"
+    "test:characterization": "node --test tests/characterization.test.js",
+    "deploy": "npm run build && wrangler deploy",
+    "worker:dev": "npm run build && wrangler dev"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^3.1.2",
@@ -18,10 +20,12 @@
     "postcss": "^8.5.33",
     "svelte": "^4.2.19",
     "tailwindcss": "^3.4.19",
-    "vite": "^5.4.10"
+    "vite": "^5.4.10",
+    "wrangler": "^4.168.0"
   },
   "allowScripts": {
-    "esbuild@0.21.5": true
+    "esbuild@0.28.2": true,
+    "workerd@1.20261123.1": true
   },
   "dependencies": {
     "daisy-dual-range": "^0.1.0",
