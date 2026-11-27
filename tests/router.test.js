@@ -88,6 +88,24 @@ test('a tempo subdivision expression never writes to the delay parameter', () =>
   assert.equal(event.binding.target, 'del');
 });
 
+test('a global toggle footswitch overrides its stored momentary binding', () => {
+  const toggleGlobals = {
+    ...globals,
+    footswitches: [{ id: 'FS2', name: 'Stomp 2', mode: 'toggle', trigger: { type: 'cc', channel: 1, number: 6 } }],
+  };
+  const { router, sent } = setup({
+    globals: toggleGlobals,
+    row: {
+      preset: 1, name: 'Global toggle',
+      stomps: [{ fsId: 'FS2', mode: 'value', targets: [{ block: 'fx1' }] }],
+      expressions: [],
+    },
+  });
+  router.setBlockState('fx1', true);
+  router.handleMidi({ port: 'GT-10', bytes: [0xb0, 6, 127] });
+  assert.deepEqual(sent, [buildCc(1, 20, 0)]);
+});
+
 test('a footswitch value of 0 turns off every block assigned to it', () => {
   const { router, sent } = setup();
   router.handleMidi({ port: 'GT-10', bytes: [0xb0, 6, 0] });

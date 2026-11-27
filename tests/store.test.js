@@ -16,6 +16,17 @@ function memoryStorage(initial = {}) {
   };
 }
 
+test('footswitch modes normalize and override stored per-preset modes', () => {
+  const legacy = normalizeState({ globals: { footswitches: [{ id: 'FS1', name: 'A', trigger: { type: 'cc', channel: 1, number: 5 } }] } });
+  assert.equal(legacy.globals.footswitches[0].mode, 'value');
+
+  const state = normalizeState({
+    globals: { footswitches: [{ id: 'FS1', name: 'A', mode: 'value', trigger: { type: 'cc', channel: 1, number: 5 } }] },
+    presets: { '1': { blockStomps: { fx1: { fs: 'FS1', mode: 'toggle' } } } },
+  });
+  assert.equal(assignmentsFor(state, 1).stomps[0].mode, 'value');
+});
+
 test('the app opens on the Start page', () => {
   assert.equal(createDefaultState().mode, 'start');
 });

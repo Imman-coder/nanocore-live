@@ -65,8 +65,9 @@ export function createRouter({ globals, getActiveRow, send, onEvent = () => {}, 
       for (const binding of bindings) {
         for (const target of binding.targets ?? []) {
           const block = typeof target === 'string' ? target : target.block;
+          const mode = fs.mode ?? binding.mode;
           let value = message.value ?? 0;
-          if (binding.mode === 'toggle') {
+          if (mode === 'toggle') {
             value = !blockStates.get(block) ? 127 : 0;
             blockStates.set(block, value === 127);
           } else if (typeof target.value === 'number') {

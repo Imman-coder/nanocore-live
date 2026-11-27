@@ -103,6 +103,12 @@
             <label class="flex flex-col gap-1 text-xs text-base-content/60">Name
               <input data-global="fs-name" data-fs={fs.id} type="text" bind:value={fs.name} class="input input-bordered input-sm" />
             </label>
+            <label class="flex flex-col gap-1 text-xs text-base-content/60">Mode
+              <select data-global="fs-mode" data-fs={fs.id} bind:value={fs.mode} class="select select-bordered select-sm">
+                <option value="value">Momentary</option>
+                <option value="toggle">Toggle</option>
+              </select>
+            </label>
             <label class="flex flex-col gap-1 text-xs text-base-content/60">Trigger
               <select data-global="fs-type" data-fs={fs.id} bind:value={fs.trigger.type} class="select select-bordered select-sm">
                 <option value="cc">CC</option>

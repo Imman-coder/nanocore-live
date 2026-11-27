@@ -127,7 +127,7 @@ export function createDefaultState() {
       settingsLayout: 1,
       recallMethod: 'sysex',
       footswitches: [1, 2, 3, 4].map((n) => ({
-        id: `FS${n}`, name: `Stomp ${n}`, trigger: { type: 'cc', channel: 1, number: n + 4 },
+        id: `FS${n}`, name: `Stomp ${n}`, mode: 'value', trigger: { type: 'cc', channel: 1, number: n + 4 },
       })),
       expressionPedals: defaultPedals(),
       baseOverride: false,
@@ -187,6 +187,10 @@ export function normalizeState(state) {
   const active = Number(state?.activePreset) || Number(Object.keys(presets)[0]) || 1;
   const globals = { ...base.globals, ...(state?.globals ?? {}) };
   if (!Array.isArray(globals.footswitches) || !globals.footswitches.length) globals.footswitches = base.globals.footswitches;
+  globals.footswitches = globals.footswitches.map((fs) => ({
+    ...fs,
+    mode: fs.mode === 'toggle' ? 'toggle' : 'value',
+  }));
   if (!Array.isArray(globals.expressionPedals) || !globals.expressionPedals.length) globals.expressionPedals = base.globals.expressionPedals;
   globals.expressionPedals = globals.expressionPedals.map((pedal) => {
     const copy = { ...pedal };
@@ -258,7 +262,8 @@ export function assignmentsFor(state, preset) {
   for (const [block, assignment] of Object.entries(record.blockStomps)) {
     const fsId = typeof assignment === 'string' ? assignment : assignment?.fs;
     if (!fsId) continue;
-    const mode = typeof assignment === 'string' ? 'value' : (assignment?.mode ?? 'value');
+    const fs = (state.globals.footswitches ?? []).find((entry) => entry.id === fsId);
+    const mode = fs?.mode ?? (typeof assignment === 'string' ? 'value' : (assignment?.mode ?? 'value'));
     const value = typeof assignment === 'object' ? assignment?.value : undefined;
     const list = byStomp.get(fsId) ?? { fsId, mode, targets: [] };
     list.targets.push({ block, ...(typeof value === 'number' ? { value } : {}) });

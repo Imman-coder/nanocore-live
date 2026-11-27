@@ -64,6 +64,7 @@ test('Globals carries every global switch including absolute faders', () => {
   assert.match(globals, /data-global="firmware"/);
   assert.match(globals, /data-global="midi-channel"/);
   assert.match(globals, /data-global="recall-method"/);
+  assert.match(globals, /data-global="fs-mode"/);
   assert.match(globals, /data-global="tempo-sync"/);
   assert.match(globals, /card-title/);
   assert.match(globals, /toggle toggle-sm toggle-primary/);
