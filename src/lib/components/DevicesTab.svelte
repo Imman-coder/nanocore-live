@@ -67,18 +67,20 @@
   }
 </script>
 
-<div class="mb-3 flex flex-wrap items-end justify-between gap-2">
-  <div class="min-w-0">
-    <h2 class="m-0 mb-3 text-lg">MIDI devices</h2>
-    <p class="text-muted text-xs">Choose the pedal's reply input, send output and any controller inputs.</p>
+<div class="mb-4 flex flex-wrap items-end justify-between gap-3">
+  <div>
+    <h3 class="card-title text-base">MIDI devices</h3>
+    <p class="text-sm text-base-content/60">Choose the pedal's reply input, send output and controller inputs.</p>
   </div>
-  <button data-devices-scan class="btn" on:click={() => ctx.scanPorts()}>Scan devices</button>
+  <button data-devices-scan class="btn btn-outline btn-sm" on:click={() => ctx.scanPorts()}>Scan devices</button>
 </div>
 
 {#if !(ports.inputs.length || $uiView.connected)}
-  <div class="alert">Scan MIDI devices or connect first to see the available ports.</div>
+  <div class="alert alert-info">
+    <span>Scan MIDI devices or connect first to see the available ports.</span>
+  </div>
 {:else}
-  <div class="card mb-3 overflow-x-auto border border-base-300 bg-base-200">
+  <div class="card mb-4 overflow-x-auto border border-base-300 bg-base-100 shadow-sm">
     <table class="table table-xs w-full">
       <thead>
         <tr>
@@ -96,7 +98,7 @@
               {#if row.input}
                 <input class="radio radio-sm radio-primary" type="radio" name="dev-input" value={row.input.id} bind:group={deviceInputId} aria-label={`${row.name} replies`} />
               {:else}
-                <span class="text-muted">—</span>
+                <span class="text-base-content/40">—</span>
               {/if}
             </td>
             <td>
@@ -107,14 +109,14 @@
                   <span class="badge badge-outline badge-sm">Fixed</span>
                 {/if}
               {:else}
-                <span class="text-muted">—</span>
+                <span class="text-base-content/40">—</span>
               {/if}
             </td>
             <td>
               {#if row.input}
                 <input class="checkbox checkbox-sm checkbox-primary" type="checkbox" data-dev-role={row.input.id} checked={enabledInputIds.includes(row.input.id) && row.input.id !== deviceInputId} on:change={(event) => toggleController(row.input.id, event.currentTarget.checked)} aria-label={`${row.name} controller`} />
               {:else}
-                <span class="text-muted">—</span>
+                <span class="text-base-content/40">—</span>
               {/if}
             </td>
           </tr>
@@ -123,11 +125,11 @@
     </table>
   </div>
 
-  <!-- <div class="card mb-0 flex flex-row items-center gap-2 border border-base-300 bg-base-200"> -->
-    <button class="btn" data-dev="refresh" on:click={() => ctx.render()}>Refresh ports</button>
-    <button class="btn" data-dev="read" on:click={() => ctx.readSnapshot()}>Read snapshot now</button>
-    <button class="btn btn-primary" data-dev="save" on:click={save}>Save device selection</button>
-  <!-- </div> -->
+  <div class="join">
+    <button class="btn btn-sm join-item" data-dev="refresh" on:click={() => ctx.render()}>Refresh ports</button>
+    <button class="btn btn-sm join-item" data-dev="read" on:click={() => ctx.readSnapshot()}>Read snapshot now</button>
+    <button class="btn btn-primary btn-sm join-item" data-dev="save" on:click={save}>Save device selection</button>
+  </div>
 {/if}
 
-<p class="mt-3 text-xs text-muted">Last device reply: {$uiView.lastReply ?? 'none'}</p>
+<p class="mt-4 text-xs text-base-content/50">Last device reply: {$uiView.lastReply ?? 'none'}</p>

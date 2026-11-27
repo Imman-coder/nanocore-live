@@ -42,4 +42,6 @@ test('the Tailwind entry stylesheet contains only the three directives', () => {
   assert.match(markup, /checkbox checkbox-sm checkbox-primary/);
   assert.match(markup, /modal modal-open/);
   assert.match(markup, /tabs tabs-bordered/);
+  assert.doesNotMatch(markup, /text-muted|bg-panel|border-line|rounded-\[10px\]/);
+  assert.doesNotMatch(markup, /bg-\[#[0-9a-fA-F]{3,8}\]/);
 });

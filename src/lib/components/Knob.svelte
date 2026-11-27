@@ -70,7 +70,7 @@
       <circle cx="32" cy="32" r="29" fill="none" stroke="oklch(var(--p))" stroke-width="3" stroke-linecap="round" stroke-dasharray="{valueArc} {ringLength}" />
     </svg>
     <div
-      class="relative z-10 grid h-[54px] w-[54px] cursor-ns-resize touch-none place-items-center rounded-full border-2 border-line bg-[#0f1319]"
+      class="relative z-10 grid h-[54px] w-[54px] cursor-ns-resize touch-none place-items-center rounded-full border-2 border-base-300 bg-base-100"
       role="slider"
       tabindex="0"
       aria-label={label}
@@ -83,10 +83,10 @@
       on:pointercancel={onPointerUp}
       on:keydown={onKeyDown}
     >
-      <div class="relative h-[38px] w-[38px] rounded-full bg-panel-2 [transform:rotate(var(--angle,0deg))]" style="--angle: {angle}deg"><i class="absolute left-1/2 top-[3px] h-3 w-0.5 -translate-x-1/2 bg-accent"></i></div>
+      <div class="relative h-[38px] w-[38px] rounded-full bg-neutral [transform:rotate(var(--angle,0deg))]" style="--angle: {angle}deg"><i class="absolute left-1/2 top-[3px] h-3 w-0.5 -translate-x-1/2 bg-accent"></i></div>
     </div>
   </div>
-  <div class="flex flex-col gap-0.5 text-[11px]"><label class="text-xs text-muted" for={id}>{label}</label><span class="text-center">{shown}</span></div>
+  <div class="flex flex-col gap-0.5 text-[11px]"><label class="text-xs text-base-content/60" for={id}>{label}</label><span class="text-center">{shown}</span></div>
   <input
     {id}
     class="pointer-events-none absolute h-px w-px input input-bordered input-sm opacity-0"

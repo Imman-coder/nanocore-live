@@ -48,6 +48,10 @@ test('Settings tab includes the demo-only real-data opt-in', () => {
   assert.match(settings, /flex-none/);
   assert.match(settings, /hideLivePresetSelector/);
   assert.doesNotMatch(settings, /hideSidebar/);
+  assert.match(settings, /modal-backdrop/);
+  assert.match(settings, /class="join"/);
+  assert.match(settings, /alert alert-warning/);
+  assert.match(settings, /toggle toggle-sm toggle-primary/);
 });
 
 test('Globals carries every global switch including absolute faders', () => {
@@ -59,6 +63,9 @@ test('Globals carries every global switch including absolute faders', () => {
   assert.match(globals, /data-global="midi-channel"/);
   assert.match(globals, /data-global="recall-method"/);
   assert.match(globals, /data-global="tempo-sync"/);
+  assert.match(globals, /card-title/);
+  assert.match(globals, /toggle toggle-sm toggle-primary/);
+  assert.match(globals, /class="join"/);
 });
 
 test('MIDI devices keep the chosen reply port and use radio controls', () => {
@@ -74,6 +81,8 @@ test('MIDI devices keep the chosen reply port and use radio controls', () => {
   assert.match(devices, /NANOCORE send/);
   assert.match(devices, /Controller receive/);
   assert.match(devices, /<table/);
+  assert.match(devices, /alert alert-info/);
+  assert.match(devices, /class="join"/);
   assert.doesNotMatch(devices, /title=\{port\.id\}/);
 });
 

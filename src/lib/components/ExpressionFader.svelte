@@ -136,9 +136,9 @@
   bind:this={rootEl}
 >
   <div class="font-bold">{pedal?.name ?? pedal?.id}</div>
-  <div class="overflow-hidden text-ellipsis text-[11px] text-muted">{ctx.describeTrigger(pedal?.trigger)} → {targetLabel}</div>
+  <div class="overflow-hidden text-ellipsis text-[11px] text-base-content/60">{ctx.describeTrigger(pedal?.trigger)} → {targetLabel}</div>
   <div
-    class="relative block min-h-6 flex-1 cursor-ew-resize touch-none overflow-hidden rounded-md bg-[#0f1319] {vertical ? '!mx-auto !my-0.5 !h-auto !w-6' : 'h-full w-full'}"
+    class="relative block min-h-6 flex-1 cursor-ew-resize touch-none overflow-hidden rounded-md bg-base-100 {vertical ? '!mx-auto !my-0.5 !h-auto !w-6' : 'h-full w-full'}"
     bind:this={meterEl}
     id={`expr-meter-${pedal?.id}`}
     data-expression-meter={pedal?.id}
@@ -156,7 +156,7 @@
       class="absolute bottom-0 left-0 {vertical ? 'w-full bg-gradient-to-t from-accent-2 to-accent' : 'h-full bg-gradient-to-r from-accent-2 to-accent'}"
       style={vertical ? `height: ${percent}%` : `width: ${percent}%`}></i>
   </div>
-  <div class="overflow-hidden text-ellipsis text-[11px] text-muted" id={`expr-value-${pedal?.id}`}>{percent}%</div>
+  <div class="overflow-hidden text-ellipsis text-[11px] text-base-content/60" id={`expr-value-${pedal?.id}`}>{percent}%</div>
 </div>
 
 

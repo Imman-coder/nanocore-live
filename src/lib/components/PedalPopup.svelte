@@ -145,13 +145,13 @@
       <h2 class="m-0 mb-3 text-lg">Expression pedal → {BLOCK_BY_ID[target?.block]?.name ?? target?.block} / {target?.label}</h2>
       <button class="btn btn-sm" on:click={onClose}>Close</button>
     </div>
-    <p class="text-muted text-xs">One pedal can drive only one parameter in this preset. Right-click another parameter to reassign it.</p>
+    <p class="text-base-content/60 text-xs">One pedal can drive only one parameter in this preset. Right-click another parameter to reassign it.</p>
     {#if target?.cc === null}
       <p class="alert alert-warning text-xs">⚠ This parameter has no documented CC — it uses SysEx. Live sweeps may be less stable and are throttled.</p>
     {/if}
 
-    <h3 class="mb-2 mt-3.5 text-xs uppercase tracking-[0.08em] text-muted">Pedal</h3>
-    <p class="text-xs text-muted">Selected: <b>{chosen?.name ?? 'None'}</b></p>
+    <h3 class="mb-2 mt-3.5 text-xs uppercase tracking-[0.08em] text-base-content/60">Pedal</h3>
+    <p class="text-xs text-base-content/60">Selected: <b>{chosen?.name ?? 'None'}</b></p>
     <div class="my-2 flex flex-wrap gap-2">
       {#each pedals as item (item.id)}
         {@const usedGlobally = globalVolumeId === item.id}
@@ -161,47 +161,47 @@
           on:click={() => choosePedal(item.id)}
         >
           <b>{item.name}</b>
-          <span class="text-xs {pedal === item.id ? 'text-primary-content opacity-80' : 'text-muted'}">{usedGlobally ? 'Global · Preset volume' : ctx.describeTrigger(item.trigger)}</span>
+          <span class="text-xs {pedal === item.id ? 'text-primary-content opacity-80' : 'text-base-content/60'}">{usedGlobally ? 'Global · Preset volume' : ctx.describeTrigger(item.trigger)}</span>
         </button>
       {/each}
     </div>
 
-    <!-- <h3 class="mb-2 mt-3.5 text-xs uppercase tracking-[0.08em] text-muted">Incoming MIDI message</h3>
+    <!-- <h3 class="mb-2 mt-3.5 text-xs uppercase tracking-[0.08em] text-base-content/60">Incoming MIDI message</h3>
     <div class="mb-2.5 flex flex-wrap items-center gap-2">
-      <label for="popup-type" class="text-xs text-muted min-w-[90px]">Type</label>
+      <label for="popup-type" class="text-xs text-base-content/60 min-w-[90px]">Type</label>
       <select id="popup-type" class="select select-bordered select-sm" value={message.type} on:change={(event) => setMessage('type', event.currentTarget.value)}>
         {#each ['cc', 'note', 'pc'] as type}
           <option value={type} selected={message.type === type}>{type.toUpperCase()}</option>
         {/each}
       </select>
-      <label for="popup-channel" class="text-xs text-muted min-w-[90px]">Channel</label>
+      <label for="popup-channel" class="text-xs text-base-content/60 min-w-[90px]">Channel</label>
       <input id="popup-channel" class="input input-bordered input-sm" type="number" min="1" max="16" value={message.channel ?? 1}
         on:input={(event) => setMessage('channel', Number(event.currentTarget.value))}>
-      <label for="popup-number" class="text-xs text-muted min-w-[90px]">Number</label>
+      <label for="popup-number" class="text-xs text-base-content/60 min-w-[90px]">Number</label>
       <input id="popup-number" class="input input-bordered input-sm" type="number" min="0" max="127" value={message.number ?? 0}
         on:input={(event) => setMessage('number', Number(event.currentTarget.value))}>
       <button class="btn btn-sm" on:click={learn}>Learn from pedal</button>
     </div> -->
 
-    <h3 class="mb-2 mt-3.5 text-xs uppercase tracking-[0.08em] text-muted">Value range mapping</h3>
+    <h3 class="mb-2 mt-3.5 text-xs uppercase tracking-[0.08em] text-base-content/60">Value range mapping</h3>
     <div class="mb-3">
-      <div class="flex items-center justify-between text-xs text-muted">
+      <div class="flex items-center justify-between text-xs text-base-content/60">
         <span>Pedal window</span><span>{minPercent}% – {maxPercent}%</span>
       </div>
       <div bind:this={pedalRangeEl} aria-label="Pedal input window"></div>
     </div>
     <div class="mb-2.5">
-      <div class="flex items-center justify-between text-xs text-muted">
+      <div class="flex items-center justify-between text-xs text-base-content/60">
         <span>Parameter window</span><span>{outMinPercent}% – {outMaxPercent}%</span>
       </div>
       <div bind:this={paramRangeEl} aria-label="Parameter output window"></div>
     </div>
-    <label for="popup-invert" class="text-xs text-muted min-w-[90px]"><input id="popup-invert" class="checkbox checkbox-sm checkbox-primary" type="checkbox" bind:checked={invert}> Invert</label>
-    <p class="text-xs text-muted">The pedal window and the parameter window are independent. Values outside the pedal window are clamped.</p>
+    <label for="popup-invert" class="text-xs text-base-content/60 min-w-[90px]"><input id="popup-invert" class="checkbox checkbox-sm checkbox-primary" type="checkbox" bind:checked={invert}> Invert</label>
+    <p class="text-xs text-base-content/60">The pedal window and the parameter window are independent. Values outside the pedal window are clamped.</p>
     {#if error}<p class="border-accent text-accent" role="alert">{error}</p>{/if}
     <div class="mb-1 mt-4 flex flex-wrap items-center gap-2">
       <button class="btn btn-primary" on:click={save}>{mapping ? 'Update assignment' : 'Assign pedal'}</button>
-      {#if mapping}<button class="cursor-pointer rounded-lg border border-line bg-panel-2 px-3 py-1.5 font-[inherit] text-danger hover:border-accent disabled:cursor-not-allowed disabled:opacity-50" on:click={remove}>Remove assignment</button>{/if}
+      {#if mapping}<button class="cursor-pointer rounded-lg border border-base-300 bg-neutral px-3 py-1.5 font-[inherit] text-danger hover:border-accent disabled:cursor-not-allowed disabled:opacity-50" on:click={remove}>Remove assignment</button>{/if}
       <button class="btn" on:click={onClose}>Cancel</button>
     </div>
   </div>
