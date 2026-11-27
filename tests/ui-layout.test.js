@@ -26,14 +26,17 @@ test('the Svelte shell owns mode switching, settings, log and toast', () => {
   assert.match(engine, /export const ctx = \{/);
 });
 
-test('Start offers direct demo entry and full transport setup', () => {
+test('Start offers direct demo and device entry with a clear status', () => {
   assert.match(start, /ctx\.connect\('demo'\)/);
-  assert.match(start, /value="webmidi"/);
-  assert.match(start, /value="webbluetooth"/);
-  assert.match(start, /value="demo"/);
-  assert.match(start, /data-port-output|data-port-controller/);
-  assert.match(start, /fetch|Fetch/);
-  assert.match(start, /onOpenGlobals/);
+  assert.match(start, /Try demo/);
+  assert.match(start, /ctx\.connect\(\)/);
+  assert.match(start, /Connect device/);
+  assert.match(start, /\$uiView\.connected/);
+  assert.match(start, /Unleash your/);
+  assert.match(start, /capabilities\?\.bluetooth/);
+  assert.match(start, /Connect via MIDI BLE/);
+  assert.match(start, /ctx\.connect\('webbluetooth'\)/);
+  assert.doesNotMatch(start, /<!--/);
 });
 
 test('Settings tab includes the demo-only real-data opt-in', () => {
