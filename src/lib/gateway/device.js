@@ -1,6 +1,6 @@
 // Device-facing gateway: request/reply, snapshot application, metadata reads.
 // All shared mutable state lives on the runtime passed in by engine.js.
-import { buildRequestSysEx, parseSysEx, COMMAND } from '../../core/messages.js';
+import { buildRequestSysEx, parseSysEx, isDevicePush, COMMAND } from '../../core/messages.js';
 import { parseSnapshot } from '../../core/snapshot.js';
 import {
   COMMAND as CAT, parsePresetCatalog, parseStorageInfo, parseSlotInfo, parseGlobalSettings, activeSlotFor,
@@ -103,6 +103,10 @@ export function createDeviceGateway(rt) {
   }
 
   function handleDeviceMessage(message) {
+    if (isDevicePush(message.bytes)) {
+      rt.onHardwarePush?.(message.bytes);
+      return;
+    }
     const raw = parseSysEx(message.bytes);
     if (!raw || raw.direction !== 0x71) {
       rt.log(`← ignored: ${[...message.bytes].slice(0, 8).map((b) => b.toString(16)).join(' ')}`);

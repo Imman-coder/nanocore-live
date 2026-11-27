@@ -8,6 +8,8 @@ import {
   buildRequestSysEx,
   buildRenameSysEx,
   parseSysEx,
+  isDevicePush,
+  DIR_DEVICE_PUSH,
   splitBleMidi,
   reassembleBleMidi,
   FIELD,
@@ -76,6 +78,14 @@ test('preset rename writes field 08 with a length-prefixed ASCII name', () => {
 test('preset rename clamps over-long names to eight characters', () => {
   const frame = buildRenameSysEx('abcdefghijk', 1);
   assert.equal(parseSysEx(frame).payload[1], 8);
+});
+
+test('unsolicited hardware pushes are detected separately from replies', () => {
+  const push = [0xf0, 0x7d, 0x4e, 0x43, DIR_DEVICE_PUSH, 0x00, 0x01, 0xf7];
+  const reply = [0xf0, 0x7d, 0x4e, 0x43, 0x71, 0x00, 0x01, 0xf7];
+  assert.equal(isDevicePush(push), true);
+  assert.equal(isDevicePush(reply), false);
+  assert.equal(isDevicePush([]), false);
 });
 
 test('device replies carry status and echo sequence and command', () => {

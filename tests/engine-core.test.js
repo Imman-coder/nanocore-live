@@ -58,6 +58,19 @@ test('engine resolver: initial raw values follow the assigned target', () => {
   assert.equal(subdivisionForRaw(127), '1/16');
 });
 
+test('dispatcher applies global tempo changes and emits a sync effect', () => {
+  let state = createDefaultState();
+  const effects = [];
+  const core = createDispatcher({
+    getState: () => state,
+    setState: (next) => { state = next; },
+    effects: { syncDelays: (effect) => effects.push(effect) },
+  });
+  core.dispatch({ type: 'setTempo', patch: { bpm: 132, signature: '6/8' } });
+  assert.deepEqual(state.globals.tempo, { bpm: 132, signature: '6/8', subdivision: '1/8' });
+  assert.deepEqual(effects, [{ type: 'syncDelays' }]);
+});
+
 test('engine selectors derive one view of a target', () => {
   let state = createDefaultState();
   state = setTempoSync(state, 1, 'del', { enabled: true, subdivision: '1/16' });

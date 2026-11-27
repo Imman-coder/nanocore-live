@@ -58,6 +58,7 @@ let tempoTaps = [];
 let dispatcher = null;
 let device = null;
 let connection = null;
+let hardwareRefreshTimer = null;
 
 // Shared runtime for the gateway modules. Getters keep the existing local
 // variables authoritative while those modules stay independent of each other.
@@ -94,6 +95,7 @@ const rt = {
   log: (message) => log(message),
   notify: (message) => notify(message),
   isDemo: () => isDemo(),
+  onHardwarePush: () => handleHardwarePush(),
   currentAssignments: () => currentAssignments(),
 };
 
@@ -201,6 +203,16 @@ function applySnapshot(parsed) { return device.applySnapshot(parsed); }
 function refreshActiveAssets() { return device.refreshActiveAssets(); }
 function handleDeviceMessage(message) { return device.handleDeviceMessage(message); }
 function readSnapshot() { return device.readSnapshot(); }
+
+function handleHardwarePush() {
+  if (!transport) return;
+  log('Pedal setting changed — refreshing');
+  clearTimeout(hardwareRefreshTimer);
+  hardwareRefreshTimer = setTimeout(() => {
+    hardwareRefreshTimer = null;
+    readSnapshot();
+  }, 120);
+}
 function presetLabel(number) { return device.presetLabel(number); }
 function loadPresetNames() { return device.loadPresetNames(); }
 function loadAssetNames(kind) { return device.loadAssetNames(kind); }
@@ -284,7 +296,11 @@ function applyPortSelection() { return connection.applyPortSelection(); }
 function finishSetup() { return connection.finishSetup(); }
 function autoFetchCatalog() { return connection.autoFetchCatalog(); }
 function setTransportKind(kind) { return connection.setTransportKind(kind); }
-function disconnect() { return connection.disconnect(); }
+function disconnect() {
+  clearTimeout(hardwareRefreshTimer);
+  hardwareRefreshTimer = null;
+  return connection.disconnect();
+}
 function exitDemo() { return connection.exitDemo(); }
 function refreshCatalog(which = 'all') { return connection.refreshCatalog(which); }
 function scanPorts() { return connection.scanPorts(); }
@@ -345,14 +361,10 @@ export const ctx = {
       notify('Keep tapping to set a tempo');
       return;
     }
-    state = { ...state, globals: { ...state.globals, tempo: { ...state.globals.tempo, bpm } } };
-    persist();
-    syncDelays();
+    dispatch({ type: 'setTempo', patch: { bpm } });
   },
   setTempo(patch) {
-    state = { ...state, globals: { ...state.globals, tempo: { ...(state.globals.tempo ?? {}), ...patch } } };
-    persist();
-    syncDelays();
+    dispatch({ type: 'setTempo', patch });
   },
   syncDelays,
   // One resolver supplies every fader's starting position from its assigned

@@ -53,6 +53,10 @@ export function createDispatcher({ getState, setState, getSnapshot = () => null,
         next = markPresetEdited(setTempoSync(state, preset, command.block, command.patch), preset);
         pending.push({ type: 'syncDelays', block: command.block });
         break;
+      case 'setTempo':
+        next = { ...state, globals: { ...state.globals, tempo: { ...(state.globals.tempo ?? {}), ...command.patch } } };
+        pending.push({ type: 'syncDelays' });
+        break;
       case 'storeScene':
         if (command.base) {
           next = markPresetEdited(setBase(state, preset, command.values, command.enabled), preset);

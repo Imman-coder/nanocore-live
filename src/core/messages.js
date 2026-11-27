@@ -6,6 +6,13 @@
 export const MANUFACTURER = [0x7d, 0x4e, 0x43];
 export const DIR_HOST_TO_DEVICE = 0x70;
 export const DIR_DEVICE_TO_HOST = 0x71;
+export const DIR_DEVICE_PUSH = 0x72;
+
+export function isDevicePush(bytes) {
+  const data = bytes ?? [];
+  return data[0] === 0xf0 && data[1] === 0x7d && data[2] === 0x4e
+    && data[3] === 0x43 && data[4] === DIR_DEVICE_PUSH && data[data.length - 1] === 0xf7;
+}
 
 export const COMMAND = {
   GET_SNAPSHOT: 0x63,
