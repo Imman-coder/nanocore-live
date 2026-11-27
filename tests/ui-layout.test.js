@@ -127,6 +127,13 @@ test('Live keeps the editable grid and all display item kinds', () => {
   assert.match(grid, /touch-none/);
 });
 
+test('editing tiles stay draggable from their display area', () => {
+  assert.doesNotMatch(grid, /(^|\s)disabled=\{editing\}/);
+  assert.match(grid, /pointer-events-none/);
+  assert.doesNotMatch(grid, /\[data-resize\], select, input, button/);
+  assert.match(grid, /\[data-resize\], select, input/);
+});
+
 test('expression faders recall values and slide relatively by default', () => {
   assert.match(fader, /expressionInitialValue/);
   assert.match(fader, /expressionRawFromRelative/);
@@ -139,6 +146,16 @@ test('expression faders recall values and slide relatively by default', () => {
   assert.doesNotMatch(fader, /bg-\[#0f1319\] bg-gradient-to-r/);
   assert.match(fader, /h-full bg-gradient-to-r from-accent-2 to-accent/);
   assert.match(fader, /w-full bg-gradient-to-t from-accent-2 to-accent/);
+  assert.match(fader, /function measure\(\)[\s\S]{0,240}offsetWidth[\s\S]{0,240}offsetHeight/);
+});
+
+test('fit-to-screen scheduling is bounded', () => {
+  assert.match(live, /fitState\.scheduled/);
+  assert.match(live, /requestAnimationFrame/);
+  assert.doesNotMatch(live, /fitScheduled/);
+});
+
+test('expression assignment popup stacks scrim and dialog', () => {
   const popup = read('PedalPopup');
   assert.match(popup, /z-0/);
   assert.match(popup, /z-10/);

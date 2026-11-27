@@ -1,7 +1,5 @@
 // One pure resolver for every expression source: controller CC, Live fader,
 // Editor badge and popup. No caller does its own window/inversion math.
-import { buildCc } from '../core/messages.js';
-import { paramCcFor } from '../core/spec.js';
 import { normalizedExpression, expressionRawForNormalized } from '../core/live.js';
 import { SUBDIVISIONS } from '../core/tempo.js';
 import { targetFromBinding } from './targets.js';
@@ -34,13 +32,11 @@ export function resolveExpression(binding, raw, context = {}) {
   }
 
   const normalized = normalizedExpression(binding, value);
-  const cc = paramCcFor(target.block, target.index, context.variant ?? 0);
   return {
     type: 'writeParameter',
     target,
     normalized,
     raw: value,
-    bytes: buildCc(context.channel ?? 1, cc, Math.round(normalized * 127)),
     pedalId: binding?.id,
   };
 }

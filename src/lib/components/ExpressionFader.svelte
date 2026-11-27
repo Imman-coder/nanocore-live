@@ -5,7 +5,7 @@
   import { afterUpdate, onDestroy, onMount } from 'svelte';
   import { stateView, snapshotView, feedbackView, uiView, ctx as engineCtx } from '../engine.js';
   import { BLOCK_BY_ID } from '../../core/spec.js';
-  import { expressionRawToPercent, expressionRawFromRelative } from '../../core/live.js';
+  import { expressionRawToPercent, expressionRawFromRelative, faderOrientation } from '../../core/live.js';
 
   export let pedal;
   export let ctx = engineCtx;
@@ -54,8 +54,9 @@
 
   function measure() {
     if (!rootEl) return;
-    const rect = rootEl.getBoundingClientRect();
-    const next = rect.height > rect.width + 8;
+    // offset sizes are layout pixels: CSS transform from fit-to-screen must not
+    // affect orientation, or the fader flips on every scaled re-measure.
+    const next = faderOrientation(rootEl.offsetWidth, rootEl.offsetHeight);
     if (next !== vertical) vertical = next;
   }
 

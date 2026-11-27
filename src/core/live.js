@@ -19,6 +19,10 @@ export function normalizedExpression(mapping, value) {
   return outLo + input * (outHi - outLo);
 }
 
+export function faderOrientation(width, height) {
+  return Number(height) > Number(width) + 8;
+}
+
 // Relative fader travel: a gesture starts at the current value and adds the
 // pointer displacement across the fader's full span. Absolute mode instead
 // maps the touch position directly with setExpressionFromPointer.

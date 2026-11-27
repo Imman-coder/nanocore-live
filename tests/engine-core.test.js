@@ -25,7 +25,7 @@ test('engine resolver: one resolver maps param, tempo and volume bindings', () =
   assert.equal(param.type, 'writeParameter');
   assert.deepEqual(param.target, { kind: 'param', block: 'fx1', index: 0 });
   assert.ok(param.normalized > 0.49 && param.normalized < 0.51);
-  assert.equal(param.bytes[1] > 0, true);
+  assert.equal(param.bytes, undefined, 'bytes are built by the shared write builder');
 
   const tempo = resolveExpression(binding('E2', { target: 'del', tempo: true }), 10);
   assert.equal(tempo.type, 'setTempoDivision');
@@ -39,9 +39,9 @@ test('engine resolver: one resolver maps param, tempo and volume bindings', () =
 
 test('engine resolver preserves reversed and inverted pedal windows', () => {
   const base = binding('E1', { target: 'fx1', paramIndex: 0 });
-  assert.deepEqual(resolveExpression(base, 64, { channel: 1, variant: 0 }).bytes, [0xb0, 50, 64]);
-  assert.deepEqual(resolveExpression({ ...base, inputMin: 127, inputMax: 0 }, 127, { channel: 1, variant: 0 }).bytes, [0xb0, 50, 0]);
-  assert.deepEqual(resolveExpression({ ...base, invert: true }, 0, { channel: 1, variant: 0 }).bytes, [0xb0, 50, 127]);
+  assert.ok(Math.abs(resolveExpression(base, 64).normalized - 0.5) < 0.01);
+  assert.equal(resolveExpression({ ...base, inputMin: 127, inputMax: 0 }, 127).normalized, 0);
+  assert.equal(resolveExpression({ ...base, invert: true }, 0).normalized, 1);
 });
 
 test('engine resolver: initial raw values follow the assigned target', () => {

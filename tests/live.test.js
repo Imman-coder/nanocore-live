@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { stompActive, toggleCc, sceneStored, sceneBlockParticipates, expressionRawToPercent, expressionPercentToRaw, normalizedExpression, expressionRawForNormalized, expressionRawFromRelative } from '../src/core/live.js';
+import { stompActive, toggleCc, sceneStored, sceneBlockParticipates, expressionRawToPercent, expressionPercentToRaw, normalizedExpression, expressionRawForNormalized, expressionRawFromRelative, faderOrientation } from '../src/core/live.js';
 import { captureBase, baseForPreset, overrideBase } from '../src/core/base.js';
 import { connectionHint } from '../src/core/capabilities.js';
 
@@ -76,6 +76,13 @@ test('expression recall is the inverse of the live expression mapping', () => {
   assert.equal(expressionRawForNormalized(reversed, 1), 0);
 });
 
+
+test('fader orientation is invariant under uniform fit scaling', () => {
+  assert.equal(faderOrientation(60, 120), true);
+  assert.equal(faderOrientation(30, 60), true);
+  assert.equal(faderOrientation(120, 60), false);
+  assert.equal(faderOrientation(60, 30), false);
+});
 
 test('relative fader travel starts at the pressed value and follows displacement', () => {
   assert.equal(expressionRawFromRelative(40, 0, 100), 40);

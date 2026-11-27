@@ -41,10 +41,23 @@
     boardEl.style.transform = `scale(${scale})`;
   }
 
+  // A plain object guard: assigning a component variable inside rAF would
+  // schedule another Svelte update and keep the fit loop alive forever.
+  const fitState = { scheduled: false };
+
+  function scheduleFit() {
+    if (fitState.scheduled) return;
+    fitState.scheduled = true;
+    requestAnimationFrame(() => {
+      fitState.scheduled = false;
+      fitBoard();
+    });
+  }
+
   onMount(() => window.addEventListener('resize', fitBoard));
   onDestroy(() => window.removeEventListener('resize', fitBoard));
-  afterUpdate(() => requestAnimationFrame(fitBoard));
-  $: if (layout.fitScreen && wrapEl && boardEl) requestAnimationFrame(fitBoard);
+  afterUpdate(() => { if (layout.fitScreen) scheduleFit(); });
+  $: if (layout.fitScreen && wrapEl && boardEl) fitBoard();
 
   function step(delta) {
     ctx.recallPreset(Math.max(1, Math.min(64, preset + delta)));

@@ -6,8 +6,9 @@ import {
 } from '../core/store.js';
 import { BLOCK_BY_ID } from '../core/spec.js';
 import { resolveExpression } from './resolver.js';
+import { buildParameterWriteForTarget } from './writes.js';
 
-export function createDispatcher({ getState, setState, effects = {} }) {
+export function createDispatcher({ getState, setState, getSnapshot = () => null, effects = {} }) {
   function emit(effect) {
     effects[effect.type]?.(effect);
   }
@@ -30,9 +31,17 @@ export function createDispatcher({ getState, setState, effects = {} }) {
     const pending = [];
 
     switch (command.type) {
-      case 'writeParameter':
-        pending.push({ type: 'writeParameter', ...command });
+      case 'writeParameter': {
+        const bytes = command.bytes ?? buildParameterWriteForTarget({
+          target: command.target,
+          normalized: command.normalized,
+          state,
+          snapshot: getSnapshot(),
+          channel: command.channel ?? state.globals.midiChannel ?? 1,
+        });
+        pending.push({ type: 'writeParameter', ...command, bytes });
         break;
+      }
       case 'setVolume':
         pending.push({ type: 'setVolume', ...command });
         break;

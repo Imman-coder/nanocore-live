@@ -1,5 +1,5 @@
 // App shell: state, transports, routing glue and view switching.
-import { BLOCK_BY_ID, FX2_SPECIAL_TYPES, SNAPSHOT_BLOCKS } from '../core/spec.js';
+import { BLOCK_BY_ID, SNAPSHOT_BLOCKS } from '../core/spec.js';
 import {
   loadState, saveState, setActivePreset, updatePreset,
   upsertStomp, assignmentsFor, effectiveStompLabel,
@@ -13,7 +13,7 @@ import { stompActive, toggleCc, sceneStored, sceneBlockParticipates } from '../c
 import { tapBpm, delayMs, normalizedForMs } from '../core/tempo.js';
 import { connectionHint } from '../core/capabilities.js';
 import { createDispatcher, selectExpressionValue, selectTempoSync } from '../engine/index.js';
-import { buildParameterWrite } from '../core/parameterWrite.js';
+
 import {
   publishState, publishSnapshot, publishFeedback, publishUi, publishLog, publishToast, publishAll,
 } from './gateway/viewmodel.js';
@@ -570,32 +570,10 @@ export const ctx = {
     }
   },
   setParameter(blockId, paramIndex, normalized) {
-    const effectIndex = SNAPSHOT_BLOCKS.indexOf(blockId);
-    if (effectIndex === -1) return;
-    const value = Math.max(0, Math.min(1, normalized));
-    const current = snapshot?.blocks.find((b) => b.id === blockId);
-    const types = typesFor(blockId, resolveFirmware(state));
-    const type = types.find((t) => (t.variant ?? t.id) === current?.variant);
-    const offset = BLOCK_BY_ID[blockId].commonParams?.length ?? 0;
-    const param = type?.params[paramIndex - offset];
-    const fx2 = snapshot?.blocks.find((b) => b.id === 'fx2');
-    const sharedCcConflict = blockId === 'mod' && fx2 && (
-      resolveFirmware(state) === '1.3.5' || FX2_SPECIAL_TYPES.includes(fx2.variant)
-    );
-    const ccBytes = sharedCcConflict ? null
-      : buildParameterWrite({ param, normalized: value, channel: Number(state.globals.midiChannel) || 1 });
-    let bytes = ccBytes;
-    if (!bytes) {
-      const view = new DataView(new ArrayBuffer(4));
-      view.setFloat32(0, value, true);
-      bytes = buildRequestSysEx(COMMAND.SET_FIELD,
-        [FIELD.PARAMETER, effectIndex, paramIndex, ...new Uint8Array(view.buffer)]);
-    }
     dispatch({
       type: 'writeParameter',
       target: { kind: 'param', block: blockId, index: paramIndex },
-      normalized: value,
-      bytes,
+      normalized: Math.max(0, Math.min(1, normalized)),
       source: 'editor',
     });
   },
@@ -686,6 +664,7 @@ export const ctx = {
 dispatcher = createDispatcher({
   getState: () => state,
   setState: (next) => { state = next; },
+  getSnapshot: () => snapshot,
   effects: {
     writeParameter: ({ target, normalized, bytes, pedalId }) => {
       ctx.noteParameter(target.block, target.index, normalized);
